@@ -8,11 +8,7 @@ Python package for downloading and processing data from the [Kansas Mesonet](htt
 pip install git+https://github.com/<your-username>/ksmesopy.git
 ```
 
-Dependencies: `numpy`, `pandas`. Charts additionally require `matplotlib`; the desktop app requires `matplotlib` and `guile`.
-
-```bash
-pip install "ksmesopy[charts] @ git+https://github.com/<your-username>/ksmesopy.git"
-```
+Dependencies: `numpy`, `pandas`, `matplotlib`. The desktop app additionally requires `guile`.
 
 ## Quick start
 
@@ -105,7 +101,7 @@ All functions accept scalars or NumPy arrays.
 
 ### Charts
 
-Each function draws onto a Matplotlib `Axes` supplied by the caller, so panels compose freely inside any figure layout. All functions accept API column names (`TEMP2MAVG`) or snake_case names (`t2m`) interchangeably.
+Each function draws onto a Matplotlib `Axes` supplied by the caller, so panels compose freely inside any figure layout. All functions accept API column names (`TEMP2MAVG`) or snake_case names (`t2m`) interchangeably, and return the axes they drew on so they can be further customised.
 
 ```python
 import matplotlib.pyplot as plt
@@ -123,6 +119,12 @@ plt.tight_layout()
 plt.savefig("meteogram.png", dpi=150)
 ```
 
+plt.tight_layout()
+plt.savefig("meteogram.png", dpi=150)
+```
+
+All functions accept API column names (`TEMP2MAVG`) or snake_case names (`t2m`) interchangeably, and return the axes they drew on so they can be further customised.
+
 | Function | Key behaviour |
 |---|---|
 | `plot_temperature(ax, df, variables, *, band, ylabel, legend)` | Shaded band when min/avg/max triplet detected (`band=True`); plain lines otherwise. Works for air and soil temperature. |
@@ -133,8 +135,6 @@ plt.savefig("meteogram.png", dpi=150)
 | `plot_wind(ax, df, speed, direction, *, ylabel, legend)` | Speed as line; direction overlaid as scatter on a twin y-axis with N/E/S/W ticks. |
 | `plot_vwc(ax, df, variables, *, ylabel, legend)` | Sequential colormap shallow→deep; auto-detects VWC columns if `variables=None`. |
 | `plot_et(ax, df, variables, *, bar, ylabel, legend)` | Line by default; `bar=True` for daily totals. |
-
-All functions return the axes they drew on so they can be chained or further customised.
 
 ---
 
