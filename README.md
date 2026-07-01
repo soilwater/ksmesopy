@@ -119,10 +119,6 @@ plt.tight_layout()
 plt.savefig("meteogram.png", dpi=150)
 ```
 
-plt.tight_layout()
-plt.savefig("meteogram.png", dpi=150)
-```
-
 All functions accept API column names (`TEMP2MAVG`) or snake_case names (`t2m`) interchangeably, and return the axes they drew on so they can be further customised.
 
 | Function | Key behaviour |
