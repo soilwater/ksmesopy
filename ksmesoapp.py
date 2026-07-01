@@ -254,7 +254,7 @@ def fetch():
                 df["PRECIP"] = df[["PRECIP", "PRECIP2"]].max(axis=1)
                 df.drop(columns="PRECIP2", inplace=True)
 
-            # Apply KSU CS655 calibration (overwrites VWC columns, drops Ka/EC)
+            # Apply KSU CS655 calibration — overwrites VWC columns with calibrated values
             if vwc_requested:
                 df = core.calibrate_vwc(df, vwc_requested)
 

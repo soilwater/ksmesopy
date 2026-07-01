@@ -12,11 +12,11 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24",
     "pandas>=2.0",
-    "requests>=2.28",
 ]
 
 [project.optional-dependencies]
-app = ["matplotlib>=3.7"]
+charts = ["matplotlib>=3.7"]
+app    = ["matplotlib>=3.7", "guile"]
 
 [project.urls]
 Homepage = "https://mesonet.k-state.edu"

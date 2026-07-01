@@ -8,7 +8,11 @@ Python package for downloading and processing data from the [Kansas Mesonet](htt
 pip install git+https://github.com/<your-username>/ksmesopy.git
 ```
 
-Dependencies: `numpy`, `pandas`, `requests`. The desktop app additionally requires `matplotlib` and `guile`.
+Dependencies: `numpy`, `pandas`. Charts additionally require `matplotlib`; the desktop app requires `matplotlib` and `guile`.
+
+```bash
+pip install "ksmesopy[charts] @ git+https://github.com/<your-username>/ksmesopy.git"
+```
 
 ## Quick start
 
@@ -45,78 +49,43 @@ A GUI for selecting stations, date ranges, variables, and intervals, with a tabu
 
 | Function | Returns | Description |
 |---|---|---|
-| `get_stations()` | `list[str]` | Sorted list of all station names |
-| `get_stations_active()` | `DataFrame` | Availability table with columns `STATION`, `OBS_INTERVAL` (s), `START`, `END` |
+| `get_stations()` | `DataFrame` | Full station metadata table |
+| `get_stations(names_only=True)` | `list[str]` | Sorted list of station names only |
+| `get_stations_active()` | `DataFrame` | Availability table: `STATION`, `OBS_INTERVAL` (s), `START`, `END` |
 
 ### Data retrieval
 
-```python
-ms.request_data(station, start, end, interval, variables, *, verbose=True, sleep=0.8)
-```
-
-- **`interval`** — `"day"`, `"hour"`, or `"5min"`
-- **`variables`** — list of API names from the table below
-- Returns a `DataFrame` with `TIMESTAMP` plus the requested columns
-- Daily timestamps are corrected for the Mesonet convention of storing each day's values at 00:00 of the following day
-
-```python
-ms.request_data_multi(stations, start, end, interval, variables, ...)
-# -> dict[str, DataFrame], one entry per station
-```
-
-```python
-ms.list_variables(interval=None)
-# -> list of dicts with keys: api_name, snake_name, description, intervals
-```
+| Function | Returns | Description |
+|---|---|---|
+| `request_data(station, start, end, interval, variables, *, verbose, sleep)` | `DataFrame` | Download data for one station. `interval` is `"day"`, `"hour"`, or `"5min"`. Daily timestamps are corrected from the Mesonet's next-day convention. |
+| `request_data_multi(stations, start, end, interval, variables, *, verbose, sleep)` | `dict[str, DataFrame]` | Same as above for a list of stations; returns one DataFrame per station. |
+| `list_variables(interval=None)` | `list[dict]` | Variable catalogue filtered by interval, or all variables if `None`. Each entry has keys `api_name`, `snake_name`, `description`, `intervals`. |
+| `rename_columns(df, preset="snake")` | `DataFrame` | Rename API column names to snake_case (e.g. `TEMP2MAVG` → `t2m`). Pass a `dict` for a custom mapping. |
 
 ### Soil processing
 
-```python
-# Apply the KSU site-specific CS655 calibration equation.
-# Requires Ka (SOILKA*CM) and EC (SOILEC*CM) to be fetched alongside VWC*CM.
-# Drops the raw Ka/EC columns from the output.
-df = ms.calibrate_vwc(df, vwc_cols=["VWC5CM", "VWC10CM", "VWC20CM", "VWC50CM"])
+| Function | Returns | Description |
+|---|---|---|
+| `calibrate_vwc(df, vwc_cols=None)` | `DataFrame` | Replace firmware VWC values with the KSU site-specific calibration. Requires `SOILKA*CM` and `SOILEC*CM` columns. Works on any subset of depths. |
+| `compute_soil_water_storage(df)` | `DataFrame` | Trapezoidal soil water storage in the top 50 cm (mm). Requires all four VWC depths; adds a `STORAGE_MM` column. Call `calibrate_vwc()` first for calibrated storage. |
 
-# Trapezoidal soil water storage in the top 50 cm (mm).
-# Requires all four VWC depths. Adds a STORAGE_MM column.
-df = ms.compute_soil_water_storage(df)
-```
+### Derived variables
 
-### Derived variables (utils)
-
-```python
-# Growing degree days — clips tmin/tmax to [base, ceiling] before averaging
-gdd = ms.growing_degree_days(tmin, tmax, base=10.0, ceiling=30.0)
-
-# NOAA/NWS heat index (apparent temperature, °C)
-hi = ms.heat_index(temp, rh)
-
-# NWS wind chill (°C); valid for temp <= 10 °C, wind >= 1.3 m s⁻¹
-wc = ms.wind_chill(temp, wspd)
-
-# Temperature-Humidity Index for livestock heat stress (dimensionless)
-thi = ms.temperature_humidity_index(temp, rh)
-# Thresholds (dairy): <68 none · 68–72 mild · 72–80 moderate · 80–90 severe · >90 dangerous
-```
+| Function | Returns | Description |
+|---|---|---|
+| `growing_degree_days(tmin, tmax, base=10.0, ceiling=30.0)` | `ndarray` | Daily GDD. Both tmin/tmax clipped to `[base, ceiling]` before averaging. |
+| `heat_index(temp, rh)` | `ndarray` | NOAA/NWS apparent temperature (°C). |
+| `wind_chill(temp, wspd)` | `ndarray` | NWS wind chill (°C); valid for temp ≤ 10 °C, wind ≥ 1.3 m s⁻¹. |
+| `temperature_humidity_index(temp, rh)` | `ndarray` | THI for livestock heat stress. Thresholds (dairy): <68 none · 68–72 mild · 72–80 moderate · 80–90 severe · >90 dangerous. |
 
 ### Reference evapotranspiration
 
-```python
-# FAO-56 Penman-Monteith — supply actual vapour pressure via one of:
-#   ea=     actual vapour pressure (kPa)
-#   vpd=    vapour pressure deficit (kPa)
-#   rhmin= + rhmax=   daily RH min/max (%)
-ETo, Ra = ms.reference_et_penman_monteith(
-    doy, lat, elev, tmin, tmax, srad, wspd,
-    rhmin=rh_min, rhmax=rh_max,
-)
+| Function | Returns | Description |
+|---|---|---|
+| `reference_et_penman_monteith(doy, lat, elev, tmin, tmax, srad, wspd, rhmin, rhmax, *, vpd, ea, wind_height)` | `(ETo, Ra)` | FAO-56 Penman-Monteith. Supply vapour pressure via `ea=`, `vpd=`, or `rhmin=`+`rhmax=`. `srad` in W m⁻², converted internally. |
+| `reference_et_hargreaves(doy, lat, tmin, tmax, *, tmean)` | `(ETo, Ra)` | Hargreaves–Samani. Temperature only — no humidity, radiation, or wind needed. |
 
-# Hargreaves–Samani — temperature only, no humidity or radiation needed
-ETo, Ra = ms.reference_et_hargreaves(doy, lat, tmin, tmax)
-
-# Both return (ETo [mm day⁻¹], Ra [MJ m⁻² day⁻¹])
-# srad is supplied as W m⁻² (as reported by the Mesonet); converted internally
-```
+Both return `(ETo [mm day⁻¹], Ra [MJ m⁻² day⁻¹])`.
 
 ### Atmospheric helpers
 
@@ -133,6 +102,39 @@ ETo, Ra = ms.reference_et_hargreaves(doy, lat, tmin, tmax)
 | `srad_to_mj(srad, period)` | energy (MJ m⁻²) |
 
 All functions accept scalars or NumPy arrays.
+
+### Charts
+
+Each function draws onto a Matplotlib `Axes` supplied by the caller, so panels compose freely inside any figure layout. All functions accept API column names (`TEMP2MAVG`) or snake_case names (`t2m`) interchangeably.
+
+```python
+import matplotlib.pyplot as plt
+import ksmesopy as ms
+
+fig, axes = plt.subplots(5, 1, sharex=True, figsize=(12, 14))
+
+ms.plot_temperature(axes[0], df, ["TEMP2MAVG", "TEMP2MMIN", "TEMP2MMAX"])
+ms.plot_precip(axes[1], df, "PRECIP")
+ms.plot_humidity(axes[2], df, "RELHUM2MAVG")
+ms.plot_solar_radiation(axes[3], df, ["SRAVG", "Ra"])  # Ra drawn dashed
+ms.plot_vwc(axes[4], df)                               # auto-detects VWC columns
+
+plt.tight_layout()
+plt.savefig("meteogram.png", dpi=150)
+```
+
+| Function | Key behaviour |
+|---|---|
+| `plot_temperature(ax, df, variables, *, band, ylabel, legend)` | Shaded band when min/avg/max triplet detected (`band=True`); plain lines otherwise. Works for air and soil temperature. |
+| `plot_precip(ax, df, variable, *, ylabel, color)` | Bar chart, bar width inferred from timestamp spacing. |
+| `plot_humidity(ax, df, variables, *, ylabel, legend)` | Lines, y-axis fixed 0–100 %. |
+| `plot_vpd(ax, df, variables, *, ylabel, legend)` | Filled area + line, y-axis starts at 0. |
+| `plot_solar_radiation(ax, df, variables, *, ylabel, legend)` | Filled area for observed; dashed line for Ra columns (detected by name). |
+| `plot_wind(ax, df, speed, direction, *, ylabel, legend)` | Speed as line; direction overlaid as scatter on a twin y-axis with N/E/S/W ticks. |
+| `plot_vwc(ax, df, variables, *, ylabel, legend)` | Sequential colormap shallow→deep; auto-detects VWC columns if `variables=None`. |
+| `plot_et(ax, df, variables, *, bar, ylabel, legend)` | Line by default; `bar=True` for daily totals. |
+
+All functions return the axes they drew on so they can be chained or further customised.
 
 ---
 
@@ -201,7 +203,7 @@ Intervals: **D** = daily only · **H** = hourly and daily · **A** = 5-min, hour
 | `VWC20CM` | `vwc_20cm` | Volumetric water content 20 cm | m³ m⁻³ | A |
 | `VWC50CM` | `vwc_50cm` | Volumetric water content 50 cm | m³ m⁻³ | A |
 
-> **VWC note:** the Mesonet API returns firmware-equation VWC. Call `calibrate_vwc()` to apply the KSU site-specific equation, which requires fetching `SOILKA*CM` and `SOILEC*CM` alongside the VWC columns. The desktop app does this automatically.
+> **VWC note:** the Mesonet API returns VWC computed by the CS655 firmware equation. Call `calibrate_vwc()` to replace those values with the KSU site-specific calibration. Requires `SOILKA*CM` and `SOILEC*CM` to be fetched alongside `VWC*CM`. Works for any subset of depths independently.
 
 ---
 

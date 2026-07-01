@@ -145,20 +145,8 @@ _POLITE_SLEEP = 0.8    # seconds between successful chunk requests
 # Station metadata
 # ---------------------------------------------------------------------------
 
-def get_stations(names_only: bool = False) -> pd.DataFrame | list[str]:
-    """
-    Return station metadata or a plain list of station names.
-
-    Parameters
-    ----------
-    names_only : bool, default False
-        If False, return the full metadata DataFrame from the API.
-        If True, return a sorted list of station name strings.
-
-    Returns
-    -------
-    pd.DataFrame or list[str]
-    """
+def get_stations(names_only=False) -> list[str]:
+    """Return a sorted DataFrame or list of all Kansas Mesonet station names or metadata."""
     url = f"{_BASE_URL}/stationnames/"
     try:
         df = pd.read_csv(url)
@@ -166,8 +154,9 @@ def get_stations(names_only: bool = False) -> pd.DataFrame | list[str]:
             names = sorted(df.iloc[:, 0].dropna().unique().tolist())
             if not names:
                 raise RuntimeError("API returned an empty station list.")
-            return names
-        return df
+            return names  
+        else:
+            return df
     except Exception as exc:
         raise RuntimeError(f"Could not retrieve stations: {exc}") from exc
 
@@ -415,33 +404,32 @@ def rename_columns(
 
 def calibrate_vwc(df: pd.DataFrame, vwc_cols: list[str] | None = None) -> pd.DataFrame:
     """
-    Apply the KSU CS655 calibration equation, overwriting the raw VWC values.
+    Apply the KSU CS655 calibration equation and drop the raw Ka/EC columns.
 
     VWC = max(-0.115 + 0.0989 * sqrt(Ka) - 0.0572 * EC, 0)
 
-    The Mesonet API returns VWC computed by the CS655 firmware equation. This
-    function replaces those values with the KSU site-specific calibration for
-    any depth where Ka (SOILKA*CM) and EC (SOILEC*CM) are present. Depths
-    without Ka/EC are skipped with a warning. All other columns are unchanged.
+    The raw VWC columns returned by the Mesonet API use the CS655 firmware
+    equation; this function replaces them with values from the KSU site-specific
+    calibration.
 
     Parameters
     ----------
     df : pd.DataFrame
-        Must contain SOILKA*CM and SOILEC*CM columns for each depth to calibrate.
+        Must contain SOILKA*CM and SOILEC*CM columns for each depth requested.
     vwc_cols : list[str] or None
-        VWC columns to calibrate. Any subset of
-        ['VWC5CM', 'VWC10CM', 'VWC20CM', 'VWC50CM'].
-        Defaults to all depths found with matching Ka/EC columns.
+        Subset of ['VWC5CM', 'VWC10CM', 'VWC20CM', 'VWC50CM'].
+        Defaults to all four depths.
 
     Returns
     -------
     pd.DataFrame
-        Copy of df with VWC values replaced by calibrated equivalents.
+        Copy of df with calibrated VWC values and Ka/EC columns removed.
     """
     df = df.copy()
     if vwc_cols is None:
         vwc_cols = _ALL_VWC
 
+    to_drop: list[str] = []
     for col in vwc_cols:
         if col not in _VWC_DEPS:
             raise ValueError(f"{col!r} is not a valid VWC column. Options: {_ALL_VWC}")
@@ -449,10 +437,10 @@ def calibrate_vwc(df: pd.DataFrame, vwc_cols: list[str] | None = None) -> pd.Dat
         if ka_col not in df.columns or ec_col not in df.columns:
             logger.warning("Skipping %s calibration — %s or %s not found.", col, ka_col, ec_col)
             continue
-        df[col] = np.round(
-            np.maximum(-0.115 + 0.0989 * np.sqrt(df[ka_col]) - 0.0572 * df[ec_col], 0), 4
-        )
+        df[col] = np.round(np.maximum(-0.115 + 0.0989 * np.sqrt(df[ka_col]) - 0.0572 * df[ec_col], 0), 4)
+        to_drop.extend([ka_col, ec_col])
 
+    df.drop(columns=list(set(to_drop)), inplace=True, errors="ignore")
     return df
 
 
@@ -463,10 +451,6 @@ def compute_soil_water_storage(df: pd.DataFrame) -> pd.DataFrame:
     The 5 cm sensor is assigned to both the surface (0 cm) and the 5 cm node;
     integration nodes are [0, 5, 10, 20, 50] cm. Rows with any NaN VWC
     produce NaN storage.
-
-    Requires all four VWC depth columns. Call calibrate_vwc() first if you
-    want storage computed from calibrated values — the VWC column names are
-    the same either way.
 
     Parameters
     ----------
