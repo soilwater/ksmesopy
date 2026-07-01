@@ -223,21 +223,22 @@ def fetch():
             intv      = _interval.value
             user_vars = list(_selected_vars.value)
 
-            # Expand VWC requests to include their Ka + EC dependencies;
-            # add PRECIP2 alongside PRECIP for dual-gauge stations.
+            # Build the fetch list.
+            # For VWC columns: fetch the VWC column itself AND its Ka/EC deps
+            # so calibrate_vwc() has everything it needs.
+            # For PRECIP: also fetch PRECIP2 for dual-gauge merging.
             fetch_vars    = []
             vwc_requested = []
             for v in user_vars:
+                if v not in fetch_vars:
+                    fetch_vars.append(v)
                 if v in core._VWC_DEPS:
+                    vwc_requested.append(v)
                     for dep in core._VWC_DEPS[v]:
                         if dep not in fetch_vars:
                             fetch_vars.append(dep)
-                    vwc_requested.append(v)
-                else:
-                    if v not in fetch_vars:
-                        fetch_vars.append(v)
-                    if v == "PRECIP" and "PRECIP2" not in fetch_vars:
-                        fetch_vars.append("PRECIP2")
+                elif v == "PRECIP" and "PRECIP2" not in fetch_vars:
+                    fetch_vars.append("PRECIP2")
 
             df = core.request_data(
                 _station.value, _start_date.value, _end_date.value,
@@ -262,10 +263,15 @@ def fetch():
             if _compute_storage.value and set(core._ALL_VWC).issubset(set(user_vars)):
                 df = core.compute_soil_water_storage(df)
 
-            # Restore user-requested column order; append STORAGE_MM if present
-            ordered = ["TIMESTAMP"] + [v for v in user_vars if v in df.columns]
-            if "STORAGE_MM" in df.columns:
-                ordered.append("STORAGE_MM")
+            # Column order: TIMESTAMP, user-requested vars, then Ka/EC deps
+            # (fetched silently for calibration), then STORAGE_MM if computed.
+            ka_ec_cols = [dep for v in vwc_requested
+                          for dep in core._VWC_DEPS[v]
+                          if dep in df.columns]
+            ordered = (["TIMESTAMP"]
+                       + [v for v in user_vars if v in df.columns]
+                       + [c for c in ka_ec_cols if c not in user_vars]
+                       + (["STORAGE_MM"] if "STORAGE_MM" in df.columns else []))
             df = df[ordered]
 
             _raw_df.set(df)

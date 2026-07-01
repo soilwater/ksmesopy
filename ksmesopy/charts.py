@@ -104,6 +104,13 @@ def _setup_ax(ax: plt.Axes) -> None:
     ax.tick_params(axis="x", rotation=30)
 
 
+def _get_ax(ax: plt.Axes | None) -> plt.Axes:
+    """Return ax if supplied, otherwise create and return a new figure's axes."""
+    if ax is None:
+        _, ax = plt.subplots(figsize=(12, 3.5))
+    return ax
+
+
 def _require(df: pd.DataFrame, cols: list[str]) -> None:
     missing = [c for c in cols if c not in df.columns]
     if missing:
@@ -119,9 +126,9 @@ def _as_list(v: Union[str, list[str]]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 def plot_temperature(
-    ax:        plt.Axes,
-    df:        pd.DataFrame,
-    variables: Union[str, list[str]],
+    ax:        plt.Axes | None = None,
+    df:        pd.DataFrame = None,
+    variables: Union[str, list[str]] = None,
     *,
     band:    bool = True,
     ylabel:  str = "Temperature (°C)",
@@ -159,6 +166,7 @@ def plot_temperature(
     cols = _as_list(variables)
     _require(df, cols)
     t = _ts(df)
+    ax = _get_ax(ax)
     _setup_ax(ax)
 
     # Detect min/max/avg triplets for the band
@@ -229,8 +237,8 @@ def plot_temperature(
 
 
 def plot_precip(
-    ax:       plt.Axes,
-    df:       pd.DataFrame,
+    ax:       plt.Axes | None = None,
+    df:       pd.DataFrame = None,
     variable: str = "PRECIP",
     *,
     ylabel: str = "Precipitation (mm)",
@@ -258,6 +266,7 @@ def plot_precip(
     """
     _require(df, [variable])
     t = _ts(df)
+    ax = _get_ax(ax)
     _setup_ax(ax)
 
     mask = df[variable].notna()
@@ -274,8 +283,8 @@ def plot_precip(
 
 
 def plot_humidity(
-    ax:        plt.Axes,
-    df:        pd.DataFrame,
+    ax:        plt.Axes | None = None,
+    df:        pd.DataFrame = None,
     variables: Union[str, list[str]] = "RELHUM2MAVG",
     *,
     ylabel: str = "Relative humidity (%)",
@@ -304,6 +313,7 @@ def plot_humidity(
     cols = _as_list(variables)
     _require(df, cols)
     t = _ts(df)
+    ax = _get_ax(ax)
     _setup_ax(ax)
 
     for i, col in enumerate(cols):
@@ -319,8 +329,8 @@ def plot_humidity(
 
 
 def plot_vpd(
-    ax:        plt.Axes,
-    df:        pd.DataFrame,
+    ax:        plt.Axes | None = None,
+    df:        pd.DataFrame = None,
     variables: Union[str, list[str]] = "VPDEFAVG",
     *,
     ylabel: str = "VPD (kPa)",
@@ -350,6 +360,7 @@ def plot_vpd(
     cols = _as_list(variables)
     _require(df, cols)
     t = _ts(df)
+    ax = _get_ax(ax)
     _setup_ax(ax)
 
     for i, col in enumerate(cols):
@@ -366,8 +377,8 @@ def plot_vpd(
 
 
 def plot_solar_radiation(
-    ax:        plt.Axes,
-    df:        pd.DataFrame,
+    ax:        plt.Axes | None = None,
+    df:        pd.DataFrame = None,
     variables: Union[str, list[str]] = "SRAVG",
     *,
     ylabel: str = "Solar radiation (W m⁻²)",
@@ -400,6 +411,7 @@ def plot_solar_radiation(
     cols = _as_list(variables)
     _require(df, cols)
     t = _ts(df)
+    ax = _get_ax(ax)
     _setup_ax(ax)
 
     # Heuristic: columns named Ra (case-insensitive) or containing "extra"
@@ -426,8 +438,8 @@ def plot_solar_radiation(
 
 
 def plot_wind(
-    ax:        plt.Axes,
-    df:        pd.DataFrame,
+    ax:        plt.Axes | None = None,
+    df:        pd.DataFrame = None,
     speed:     str = "WSPD2MAVG",
     direction: str | None = None,
     *,
@@ -464,6 +476,7 @@ def plot_wind(
     """
     _require(df, [speed] + ([direction] if direction else []))
     t = _ts(df)
+    ax = _get_ax(ax)
     _setup_ax(ax)
 
     mask_spd = df[speed].notna()
@@ -494,8 +507,8 @@ def plot_wind(
 
 
 def plot_vwc(
-    ax:        plt.Axes,
-    df:        pd.DataFrame,
+    ax:        plt.Axes | None = None,
+    df:        pd.DataFrame = None,
     variables: Union[str, list[str]] = None,
     *,
     ylabel: str = "VWC (m³ m⁻³)",
@@ -540,6 +553,7 @@ def plot_vwc(
         cols = _as_list(variables)
     _require(df, cols)
     t = _ts(df)
+    ax = _get_ax(ax)
     _setup_ax(ax)
 
     # Depth colormap: shallow = blue, deep = brown
@@ -558,9 +572,9 @@ def plot_vwc(
 
 
 def plot_et(
-    ax:        plt.Axes,
-    df:        pd.DataFrame,
-    variables: Union[str, list[str]],
+    ax:        plt.Axes | None = None,
+    df:        pd.DataFrame = None,
+    variables: Union[str, list[str]] = None,
     *,
     bar:    bool = False,
     ylabel: str = "ET (mm day⁻¹)",
@@ -593,6 +607,7 @@ def plot_et(
     cols = _as_list(variables)
     _require(df, cols)
     t = _ts(df)
+    ax = _get_ax(ax)
     _setup_ax(ax)
 
     for i, col in enumerate(cols):
