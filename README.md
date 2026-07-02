@@ -62,7 +62,7 @@ A GUI for selecting stations, date ranges, variables, and intervals, with a tabu
 
 | Function | Returns | Description |
 |---|---|---|
-| `calibrate_vwc(df, vwc_cols=None)` | `DataFrame` | Replace firmware VWC values with the KSU site-specific calibration. Requires `SOILKA*CM` and `SOILEC*CM` columns. Works on any subset of depths. |
+| `calibrate_vwc(df, vwc_cols=None)` | `DataFrame` | Replace firmware VWC values with the KSU site-specific calibration. Fetch `SOILKA*CM` and `SOILEC*CM` alongside `VWC*CM` in the same `request_data` call. Works on any subset of depths. |
 | `compute_soil_water_storage(df)` | `DataFrame` | Trapezoidal soil water storage in the top 50 cm (mm). Requires all four VWC depths; adds a `STORAGE_MM` column. Call `calibrate_vwc()` first for calibrated storage. |
 
 ### Derived variables
@@ -114,6 +114,10 @@ ms.plot_precip(axes[1], df, "PRECIP")
 ms.plot_humidity(axes[2], df, "RELHUM2MAVG")
 ms.plot_solar_radiation(axes[3], df, ["SRAVG", "Ra"])  # Ra drawn dashed
 ms.plot_vwc(axes[4], df)                               # auto-detects VWC columns
+
+plt.tight_layout()
+plt.savefig("meteogram.png", dpi=150)
+```
 
 plt.tight_layout()
 plt.savefig("meteogram.png", dpi=150)
@@ -199,7 +203,7 @@ Intervals: **D** = daily only · **H** = hourly and daily · **A** = 5-min, hour
 | `VWC20CM` | `vwc_20cm` | Volumetric water content 20 cm | m³ m⁻³ | A |
 | `VWC50CM` | `vwc_50cm` | Volumetric water content 50 cm | m³ m⁻³ | A |
 
-> **VWC note:** the Mesonet API returns VWC computed by the CS655 firmware equation. Call `calibrate_vwc()` to replace those values with the KSU site-specific calibration. Requires `SOILKA*CM` and `SOILEC*CM` to be fetched alongside `VWC*CM`. Works for any subset of depths independently.
+> **VWC note:** the Mesonet API returns VWC computed by the CS655 firmware equation. Requesting any `VWC*CM` column will print a warning reminding you that a site-specific calibration is available. To apply it, fetch the corresponding `SOILKA*CM` and `SOILEC*CM` columns in the same `request_data` call and then pass the DataFrame to `calibrate_vwc()`. Works for any subset of depths independently.
 
 ---
 

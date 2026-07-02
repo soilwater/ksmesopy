@@ -325,6 +325,16 @@ def request_data(
         logger.info("Done — %s | %d rows × %d variables", station, len(df_master), len(variables))
 
     cols = ["TIMESTAMP"] + [v for v in variables if v in df_master.columns]
+
+    vwc_requested = [v for v in variables if v in _ALL_VWC]
+    if vwc_requested:
+        logger.warning(
+            "VWC columns %s contain raw CS655 firmware values. "
+            "For KSU site-specific calibrated values, fetch the corresponding "
+            "SOILKA*CM and SOILEC*CM columns and call calibrate_vwc().",
+            vwc_requested,
+        )
+
     return df_master[cols]
 
 
