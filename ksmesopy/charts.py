@@ -66,9 +66,9 @@ _LABELS: dict[str, str] = {
     "RELHUM2MMIN":     "RH min",       "rh_min":          "RH min",
     "RELHUM2MMAX":     "RH max",       "rh_max":          "RH max",
     "VPDEFAVG":        "VPD",          "vpd":             "VPD",
+    "VPD_calc":        "VPD (calc)",
     # Radiation
-    "SRAVG":           "Rs",           "srad":            "Rs",
-    # Wind
+    "SRAVG":           "Rs",           "srad":            "Rs",    # Wind
     "WSPD2MAVG":       "u 2 m",        "wspd":            "u 2 m",
     "WSPD2MMAX":       "u 2 m max",    "wspd_max":        "u 2 m max",
     "WSPD10MAVG":      "u 10 m",       "wspd10m":         "u 10 m",
@@ -363,15 +363,17 @@ def plot_vpd(
     ax = _get_ax(ax)
     _setup_ax(ax)
 
+    multi = len(cols) > 1
     for i, col in enumerate(cols):
         color = _COLORS[i % len(_COLORS)]
         mask = df[col].notna()
-        ax.fill_between(t[mask], df[col][mask], alpha=0.15, color=color, linewidth=0)
+        if not multi:
+            ax.fill_between(t[mask], df[col][mask], alpha=0.15, color=color, linewidth=0)
         ax.plot(t[mask], df[col][mask], linewidth=1.4, color=color, label=_label(col))
 
     ax.set_ylim(bottom=0)
     ax.set_ylabel(ylabel)
-    if legend and len(cols) > 1:
+    if legend and multi:
         ax.legend(fontsize=8, loc="upper left", framealpha=0.7)
     return ax
 
@@ -388,18 +390,18 @@ def plot_solar_radiation(
     Plot solar radiation on *ax* as a filled area.
 
     Can plot observed (SRAVG / srad) and extraterrestrial radiation (Ra)
-    together on the same axes — pass both column names and Ra will appear
-    as a dashed envelope above the observed signal.
+    together on the same axes — Ra is drawn as a dashed envelope above the
+    observed signal.
 
     Parameters
     ----------
-    ax : plt.Axes
-        Target axes.
+    ax : plt.Axes, optional
+        Target axes. A new figure is created if not supplied.
     df : pd.DataFrame
         Must contain TIMESTAMP (or timestamp) and all requested columns.
     variables : str or list[str], default 'SRAVG'
         Column name(s). Ra columns are detected by name and drawn dashed.
-    ylabel : str
+    ylabel : str, default 'Solar radiation (W m⁻²)'
         Y-axis label.
     legend : bool, default True
         Show a legend when more than one column is plotted.
