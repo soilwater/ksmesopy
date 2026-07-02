@@ -5,7 +5,7 @@ Python package for downloading and processing data from the [Kansas Mesonet](htt
 ## Installation
 
 ```bash
-pip install git+https://github.com/<your-username>/ksmesopy.git
+pip install ksmesopy
 ```
 
 Dependencies: `numpy`, `pandas`, `matplotlib`. The desktop app additionally requires `guile`.
