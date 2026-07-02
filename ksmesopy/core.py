@@ -415,28 +415,29 @@ def rename_columns(
 
 def calibrate_vwc(df: pd.DataFrame, vwc_cols: list[str] | None = None) -> pd.DataFrame:
     """
-    Apply the KSU CS655 calibration equation, overwriting the raw VWC values.
+    Apply the KSU CS655 calibration equation to produce VWC from Ka and EC.
 
     VWC = max(-0.115 + 0.0989 * sqrt(Ka) - 0.0572 * EC, 0)
 
-    The Mesonet API returns VWC computed by the CS655 firmware equation. This
-    function replaces those values with the KSU site-specific calibration for
-    any depth where Ka (SOILKA*CM) and EC (SOILEC*CM) are present. Depths
-    without Ka/EC are skipped with a warning. All other columns are unchanged.
+    Requires Ka (SOILKA*CM) and EC (SOILEC*CM) columns for each depth to
+    calibrate. The firmware VWC column (VWC*CM) does not need to be fetched —
+    it is created (or overwritten if already present) by this function.
+    Depths where Ka or EC are missing are skipped with a warning.
+    All other columns in df are unchanged.
 
     Parameters
     ----------
     df : pd.DataFrame
-        Must contain SOILKA*CM and SOILEC*CM columns for each depth to calibrate.
+        Must contain SOILKA*CM and SOILEC*CM columns for each depth requested.
     vwc_cols : list[str] or None
-        VWC columns to calibrate. Any subset of
+        Target VWC column names. Any subset of
         ['VWC5CM', 'VWC10CM', 'VWC20CM', 'VWC50CM'].
-        Defaults to all depths found with matching Ka/EC columns.
+        Defaults to all four depths (skipping any without Ka/EC).
 
     Returns
     -------
     pd.DataFrame
-        Copy of df with VWC values replaced by calibrated equivalents.
+        Copy of df with calibrated VWC columns added or overwritten.
     """
     df = df.copy()
     if vwc_cols is None:
@@ -507,7 +508,7 @@ def srad_to_mj(srad: Union[float, np.ndarray], period: Union[int, float]) -> Uni
     srad : float or array-like
         Mean solar irradiance (W m⁻²).
     period : int or float
-        Integration period in seconds (e.g. 86400 for one day).
+        Integration period in seconds (e.g. 86400 for one day, 3600 for one hour).
     """
     return np.asarray(srad) * period / 1_000_000
 
@@ -815,7 +816,10 @@ def reference_et_hargreaves(
     Requires only temperature and location; useful when humidity, radiation,
     and wind data are unavailable.
 
-    ETo = 0.0023 * Ra * (tmean + 17.8) * sqrt(tmax - tmin)
+    ETo = 0.0023 * (0.408 * Ra) * (tmean + 17.8) * sqrt(tmax - tmin)
+
+    The coefficient 0.0023 expects Ra in mm day⁻¹ equivalent; multiplying
+    Ra (MJ m⁻² day⁻¹) by 0.408 performs that conversion (FAO-56 notation).
 
     Parameters
     ----------
@@ -841,5 +845,7 @@ def reference_et_hargreaves(
     tmax  = np.asarray(tmax,  dtype=float)
     tmean = np.asarray(tmean, dtype=float) if tmean is not None else (tmin + tmax) / 2.0
     Ra    = extraterrestrial_radiation(doy, lat)
-    ETo   = 0.0023 * Ra * (tmean + 17.8) * np.sqrt(np.maximum(tmax - tmin, 0.0))
+    # The coefficient 0.0023 expects Ra in mm day⁻¹ equivalent.
+    # Multiply Ra (MJ m⁻² day⁻¹) by 0.408 to convert (FAO-56 notation; 1/2.45 ≈ 0.408).
+    ETo   = 0.0023 * (0.408 * Ra) * (tmean + 17.8) * np.sqrt(np.maximum(tmax - tmin, 0.0))
     return np.round(ETo, 2), np.round(Ra, 2)

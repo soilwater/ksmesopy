@@ -68,7 +68,9 @@ _LABELS: dict[str, str] = {
     "VPDEFAVG":        "VPD",          "vpd":             "VPD",
     "VPD_calc":        "VPD (calc)",
     # Radiation
-    "SRAVG":           "Rs",           "srad":            "Rs",    # Wind
+    "SRAVG":           "Rs",           "srad":            "Rs",
+    "Rs_MJ":           "Rs",
+    "Ra_Wm2":          "Ra",           "Ra_MJ":           "Ra",    # Wind
     "WSPD2MAVG":       "u 2 m",        "wspd":            "u 2 m",
     "WSPD2MMAX":       "u 2 m max",    "wspd_max":        "u 2 m max",
     "WSPD10MAVG":      "u 10 m",       "wspd10m":         "u 10 m",
@@ -416,11 +418,12 @@ def plot_solar_radiation(
     ax = _get_ax(ax)
     _setup_ax(ax)
 
-    # Heuristic: columns named Ra (case-insensitive) or containing "extra"
-    # are drawn as dashed envelopes rather than filled areas
+    # Heuristic: columns that represent extraterrestrial / potential radiation
+    # are drawn as dashed envelopes rather than filled areas.
+    # Matches: "Ra", "Ra_Wm2", "ra_mj", "extraterrestrial", etc.
     def _is_ra(col: str) -> bool:
         c = col.lower()
-        return c in ("ra",) or "extra" in c
+        return c == "ra" or c.startswith("ra_") or "extra" in c
 
     for i, col in enumerate(cols):
         color = _COLORS[i % len(_COLORS)]
