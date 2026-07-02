@@ -6,6 +6,7 @@ Python package for downloading and processing data from the [Kansas Mesonet](htt
 
 ```bash
 pip install ksmesopy
+pip install "ksmesopy[app]"  # Use this to also install a GUI
 ```
 
 Dependencies: `numpy`, `pandas`, `matplotlib`. The desktop app additionally requires `guile`.
@@ -26,13 +27,14 @@ df = ms.request_data(
 
 # Optional: rename columns to snake_case
 df = ms.rename_columns(df)
-# TIMESTAMP → timestamp, TEMP2MAVG → t2m, PRECIP → precip, …
+# TIMESTAMP → timestamp, TEMP2MAVG → tair_2m_avg, PRECIP → precip, …
 ```
 
 ## Desktop app
 
+Run this in your terminal
 ```bash
-python ksmesoapp.py
+ksmesopy-app
 ```
 
 A GUI for selecting stations, date ranges, variables, and intervals, with a tabular view and time-series chart. Exports to CSV and PNG.
@@ -56,13 +58,13 @@ A GUI for selecting stations, date ranges, variables, and intervals, with a tabu
 | `request_data(station, start, end, interval, variables, *, verbose, sleep)` | `DataFrame` | Download data for one station. `interval` is `"day"`, `"hour"`, or `"5min"`. Daily timestamps are corrected from the Mesonet's next-day convention. |
 | `request_data_multi(stations, start, end, interval, variables, *, verbose, sleep)` | `dict[str, DataFrame]` | Same as above for a list of stations; returns one DataFrame per station. |
 | `list_variables(interval=None)` | `list[dict]` | Variable catalogue filtered by interval, or all variables if `None`. Each entry has keys `api_name`, `snake_name`, `description`, `intervals`. |
-| `rename_columns(df, preset="snake")` | `DataFrame` | Rename API column names to snake_case (e.g. `TEMP2MAVG` → `t2m`). Pass a `dict` for a custom mapping. |
+| `rename_columns(df, preset="snake")` | `DataFrame` | Rename API column names to snake_case (e.g. `TEMP2MAVG` → `tair_2m_avg`). Pass a `dict` for a custom mapping. |
 
 ### Soil processing
 
 | Function | Returns | Description |
 |---|---|---|
-| `calibrate_vwc(df, vwc_cols=None)` | `DataFrame` | Replace firmware VWC values with the KSU site-specific calibration. Fetch `SOILKA*CM` and `SOILEC*CM` alongside `VWC*CM` in the same `request_data` call. Works on any subset of depths. |
+| `calibrate_vwc(df, vwc_cols=None)` | `DataFrame` | Replace firmware VWC values with the KSU site-specific calibration. Requires `SOILKA*CM` and `SOILEC*CM` columns. Works on any subset of depths. |
 | `compute_soil_water_storage(df)` | `DataFrame` | Trapezoidal soil water storage in the top 50 cm (mm). Requires all four VWC depths; adds a `STORAGE_MM` column. Call `calibrate_vwc()` first for calibrated storage. |
 
 ### Derived variables
@@ -101,7 +103,7 @@ All functions accept scalars or NumPy arrays.
 
 ### Charts
 
-Each function draws onto a Matplotlib `Axes` supplied by the caller, so panels compose freely inside any figure layout. All functions accept API column names (`TEMP2MAVG`) or snake_case names (`t2m`) interchangeably, and return the axes they drew on so they can be further customised.
+Each function draws onto a Matplotlib `Axes` supplied by the caller, so panels compose freely inside any figure layout. All functions accept API column names (`TEMP2MAVG`) or snake_case names (`tair_2m_avg`) interchangeably, and return the axes they drew on so they can be further customised.
 
 ```python
 import matplotlib.pyplot as plt
@@ -123,7 +125,7 @@ plt.tight_layout()
 plt.savefig("meteogram.png", dpi=150)
 ```
 
-All functions accept API column names (`TEMP2MAVG`) or snake_case names (`t2m`) interchangeably, and return the axes they drew on so they can be further customised.
+All functions accept API column names (`TEMP2MAVG`) or snake_case names (`tair_2m_avg`) interchangeably, and return the axes they drew on so they can be further customised.
 
 | Function | Key behaviour |
 |---|---|
@@ -146,28 +148,28 @@ Intervals: **D** = daily only · **H** = hourly and daily · **A** = 5-min, hour
 
 | API name | snake_case | Description | Unit | Intervals |
 |---|---|---|---|---|
-| `TEMP2MAVG` | `t2m` | Air temperature 2 m avg | °C | A |
-| `TEMP2MMIN` | `t2m_min` | Air temperature 2 m min | °C | D |
-| `TEMP2MMAX` | `t2m_max` | Air temperature 2 m max | °C | D |
-| `TEMP10MAVG` | `t10m` | Air temperature 10 m avg | °C | A |
-| `TEMP10MMIN` | `t10m_min` | Air temperature 10 m min | °C | D |
-| `TEMP10MMAX` | `t10m_max` | Air temperature 10 m max | °C | D |
-| `RELHUM2MAVG` | `rh` | Relative humidity 2 m avg | % | A |
-| `RELHUM2MMIN` | `rh_min` | Relative humidity 2 m min | % | D |
-| `RELHUM2MMAX` | `rh_max` | Relative humidity 2 m max | % | D |
-| `VPDEFAVG` | `vpd` | Vapor pressure deficit avg | kPa | A |
-| `PRESSUREAVG` | `pres` | Atmospheric pressure avg | kPa | A |
+| `TEMP2MAVG` | `tair_2m_avg` | Air temperature 2 m avg | °C | A |
+| `TEMP2MMIN` | `tair_2m_min` | Air temperature 2 m min | °C | D |
+| `TEMP2MMAX` | `tair_2m_max` | Air temperature 2 m max | °C | D |
+| `TEMP10MAVG` | `tair_10m_avg` | Air temperature 10 m avg | °C | A |
+| `TEMP10MMIN` | `tair_10m_min` | Air temperature 10 m min | °C | D |
+| `TEMP10MMAX` | `tair_10m_max` | Air temperature 10 m max | °C | D |
+| `RELHUM2MAVG` | `rh_2m_avg` | Relative humidity 2 m avg | % | A |
+| `RELHUM2MMIN` | `rh_2m_min` | Relative humidity 2 m min | % | D |
+| `RELHUM2MMAX` | `rh_2m_max` | Relative humidity 2 m max | % | D |
+| `VPDEFAVG` | `vpd_avg` | Vapor pressure deficit avg | kPa | A |
+| `PRESSUREAVG` | `pressure_avg` | Atmospheric pressure avg | kPa | A |
 | `PRECIP` | `precip` | Precipitation gauge 1 | mm | A |
 | `PRECIP2` | `precip2` | Precipitation gauge 2 | mm | A |
 | `SRAVG` | `srad` | Solar radiation avg | W m⁻² | A |
-| `WSPD2MAVG` | `wspd` | Wind speed 2 m avg | m s⁻¹ | A |
-| `WSPD2MMAX` | `wspd_max` | Wind speed 2 m max | m s⁻¹ | H¹ |
-| `WDIR2M` | `wdir` | Wind direction 2 m | ° | A |
-| `WDIR2MSTD` | `wdir_std` | Wind direction 2 m std dev | ° | A |
-| `WSPD10MAVG` | `wspd10m` | Wind speed 10 m avg | m s⁻¹ | A |
-| `WSPD10MMAX` | `wspd10m_max` | Wind speed 10 m max | m s⁻¹ | H¹ |
-| `WDIR10M` | `wdir10m` | Wind direction 10 m | ° | A |
-| `WDIR10MSTD` | `wdir10m_std` | Wind direction 10 m std dev | ° | A |
+| `WSPD2MAVG` | `wspd_2m_avg` | Wind speed 2 m avg | m s⁻¹ | A |
+| `WSPD2MMAX` | `wspd_2m_max` | Wind speed 2 m max | m s⁻¹ | H¹ |
+| `WDIR2M` | `wdir_2m` | Wind direction 2 m | ° | A |
+| `WDIR2MSTD` | `wdir_2m_std` | Wind direction 2 m std dev | ° | A |
+| `WSPD10MAVG` | `wspd_10m_avg` | Wind speed 10 m avg | m s⁻¹ | A |
+| `WSPD10MMAX` | `wspd_10m_max` | Wind speed 10 m max | m s⁻¹ | H¹ |
+| `WDIR10M` | `wdir_10m` | Wind direction 10 m | ° | A |
+| `WDIR10MSTD` | `wdir_10m_std` | Wind direction 10 m std dev | ° | A |
 
 ¹ Available at 5-min and daily only (not hourly).
 
@@ -203,7 +205,7 @@ Intervals: **D** = daily only · **H** = hourly and daily · **A** = 5-min, hour
 | `VWC20CM` | `vwc_20cm` | Volumetric water content 20 cm | m³ m⁻³ | A |
 | `VWC50CM` | `vwc_50cm` | Volumetric water content 50 cm | m³ m⁻³ | A |
 
-> **VWC note:** the Mesonet API returns VWC computed by the CS655 firmware equation. Requesting any `VWC*CM` column will print a warning reminding you that a site-specific calibration is available. To apply it, fetch the corresponding `SOILKA*CM` and `SOILEC*CM` columns in the same `request_data` call and then pass the DataFrame to `calibrate_vwc()`. Works for any subset of depths independently.
+> **VWC note:** the Mesonet API returns VWC computed by the CS655 firmware equation. Call `calibrate_vwc()` to replace those values with the KSU site-specific calibration. Requires `SOILKA*CM` and `SOILEC*CM` to be fetched alongside `VWC*CM`. Works for any subset of depths independently.
 
 ---
 

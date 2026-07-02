@@ -552,5 +552,9 @@ def ui():
             elif tab == "📈  Chart":  _chart_tab()
 
 
-if __name__ == "__main__":
+def main():
     ui()
+
+
+if __name__ == "__main__":
+    main()

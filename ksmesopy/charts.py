@@ -49,34 +49,36 @@ _COLORS = ["#2563eb", "#dc2626", "#16a34a", "#d97706", "#7c3aed", "#0891b2", "#b
 # Column label lookup: covers both API names and snake_case equivalents
 _LABELS: dict[str, str] = {
     # Temperature
-    "TEMP2MAVG":       "T 2 m avg",    "t2m":             "T 2 m avg",
-    "TEMP2MMIN":       "T 2 m min",    "t2m_min":         "T 2 m min",
-    "TEMP2MMAX":       "T 2 m max",    "t2m_max":         "T 2 m max",
-    "TEMP10MAVG":      "T 10 m avg",   "t10m":            "T 10 m avg",
-    "TEMP10MMIN":      "T 10 m min",   "t10m_min":        "T 10 m min",
-    "TEMP10MMAX":      "T 10 m max",   "t10m_max":        "T 10 m max",
+    "TEMP2MAVG":       "T 2 m avg",    "tair_2m_avg":             "T 2 m avg",
+    "TEMP2MMIN":       "T 2 m min",    "tair_2m_min":         "T 2 m min",
+    "TEMP2MMAX":       "T 2 m max",    "tair_2m_max":         "T 2 m max",
+    "TEMP10MAVG":      "T 10 m avg",   "tair_10m_avg":            "T 10 m avg",
+    "TEMP10MMIN":      "T 10 m min",   "tair_10m_min":        "T 10 m min",
+    "TEMP10MMAX":      "T 10 m max",   "tair_10m_max":        "T 10 m max",
     "SOILTMP5AVG":     "Ts 5 cm",      "tsoil_5cm":       "Ts 5 cm",
     "SOILTMP10AVG":    "Ts 10 cm",     "tsoil_10cm":      "Ts 10 cm",
     "SOILTMP5AVG655":  "Ts 5 cm",      "tsoil_5cm_655":   "Ts 5 cm",
     "SOILTMP10AVG655": "Ts 10 cm",     "tsoil_10cm_655":  "Ts 10 cm",
     "SOILTMP20AVG655": "Ts 20 cm",     "tsoil_20cm_655":  "Ts 20 cm",
     "SOILTMP50AVG655": "Ts 50 cm",     "tsoil_50cm_655":  "Ts 50 cm",
-    # Humidity / pressure
-    "RELHUM2MAVG":     "RH avg",       "rh":              "RH avg",
-    "RELHUM2MMIN":     "RH min",       "rh_min":          "RH min",
-    "RELHUM2MMAX":     "RH max",       "rh_max":          "RH max",
-    "VPDEFAVG":        "VPD",          "vpd":             "VPD",
+    # Pressure
+    "PRESSUREAVG":     "P",            "pressure_avg":    "P",
+    # Humidity
+    "RELHUM2MAVG":     "RH avg",       "rh_2m_avg":              "RH avg",
+    "RELHUM2MMIN":     "RH min",       "rh_2m_min":          "RH min",
+    "RELHUM2MMAX":     "RH max",       "rh_2m_max":          "RH max",
+    "VPDEFAVG":        "VPD",          "vpd_avg":             "VPD",
     "VPD_calc":        "VPD (calc)",
     # Radiation
     "SRAVG":           "Rs",           "srad":            "Rs",
     "Rs_MJ":           "Rs",
     "Ra_Wm2":          "Ra",           "Ra_MJ":           "Ra",    # Wind
-    "WSPD2MAVG":       "u 2 m",        "wspd":            "u 2 m",
-    "WSPD2MMAX":       "u 2 m max",    "wspd_max":        "u 2 m max",
-    "WSPD10MAVG":      "u 10 m",       "wspd10m":         "u 10 m",
-    "WSPD10MMAX":      "u 10 m max",   "wspd10m_max":     "u 10 m max",
-    "WDIR2M":          "Dir 2 m",      "wdir":            "Dir 2 m",
-    "WDIR10M":         "Dir 10 m",     "wdir10m":         "Dir 10 m",
+    "WSPD2MAVG":       "u 2 m",        "wspd_2m_avg":            "u 2 m",
+    "WSPD2MMAX":       "u 2 m max",    "wspd_2m_max":        "u 2 m max",
+    "WSPD10MAVG":      "u 10 m",       "wspd_10m_avg":         "u 10 m",
+    "WSPD10MMAX":      "u 10 m max",   "wspd_10m_max":     "u 10 m max",
+    "WDIR2M":          "Dir 2 m",      "wdir_2m":            "Dir 2 m",
+    "WDIR10M":         "Dir 10 m",     "wdir_10m":         "Dir 10 m",
     # Precipitation
     "PRECIP":          "Precip",       "precip":          "Precip",
     # VWC

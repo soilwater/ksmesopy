@@ -61,28 +61,28 @@ _D5    = frozenset({"5min", "day"})
 
 VARIABLES: list[tuple[str, str, str, frozenset]] = [
     # Atmospheric
-    ("TEMP2MAVG",       "t2m",              "Air temperature 2 m avg (°C)",           _ALL),
-    ("TEMP2MMIN",       "t2m_min",          "Air temperature 2 m min (°C)",           _DONLY),
-    ("TEMP2MMAX",       "t2m_max",          "Air temperature 2 m max (°C)",           _DONLY),
-    ("TEMP10MAVG",      "t10m",             "Air temperature 10 m avg (°C)",          _ALL),
-    ("TEMP10MMIN",      "t10m_min",         "Air temperature 10 m min (°C)",          _DONLY),
-    ("TEMP10MMAX",      "t10m_max",         "Air temperature 10 m max (°C)",          _DONLY),
-    ("RELHUM2MAVG",     "rh",               "Relative humidity 2 m avg (%)",          _ALL),
-    ("RELHUM2MMIN",     "rh_min",           "Relative humidity 2 m min (%)",          _DONLY),
-    ("RELHUM2MMAX",     "rh_max",           "Relative humidity 2 m max (%)",          _DONLY),
-    ("VPDEFAVG",        "vpd",              "Vapor pressure deficit avg (kPa)",       _ALL),
-    ("PRESSUREAVG",     "pres",             "Atmospheric pressure avg (kPa)",         _ALL),
+    ("TEMP2MAVG",       "tair_2m_avg",              "Air temperature 2 m avg (°C)",           _ALL),
+    ("TEMP2MMIN",       "tair_2m_min",          "Air temperature 2 m min (°C)",           _DONLY),
+    ("TEMP2MMAX",       "tair_2m_max",          "Air temperature 2 m max (°C)",           _DONLY),
+    ("TEMP10MAVG",      "tair_10m_avg",             "Air temperature 10 m avg (°C)",          _ALL),
+    ("TEMP10MMIN",      "tair_10m_min",         "Air temperature 10 m min (°C)",          _DONLY),
+    ("TEMP10MMAX",      "tair_10m_max",         "Air temperature 10 m max (°C)",          _DONLY),
+    ("RELHUM2MAVG",     "rh_2m_avg",               "Relative humidity 2 m avg (%)",          _ALL),
+    ("RELHUM2MMIN",     "rh_2m_min",           "Relative humidity 2 m min (%)",          _DONLY),
+    ("RELHUM2MMAX",     "rh_2m_max",           "Relative humidity 2 m max (%)",          _DONLY),
+    ("VPDEFAVG",        "vpd_avg",              "Vapor pressure deficit avg (kPa)",       _ALL),
+    ("PRESSUREAVG",     "pressure_avg",             "Atmospheric pressure avg (kPa)",         _ALL),
     ("PRECIP",          "precip",           "Precipitation gauge 1 (mm)",             _ALL),
     ("PRECIP2",         "precip2",          "Precipitation gauge 2 (mm)",             _ALL),
     ("SRAVG",           "srad",             "Solar radiation avg (W m⁻²)",            _ALL),
-    ("WSPD2MAVG",       "wspd",             "Wind speed 2 m avg (m s⁻¹)",            _ALL),
-    ("WSPD2MMAX",       "wspd_max",         "Wind speed 2 m max (m s⁻¹)",            _D5),
-    ("WDIR2M",          "wdir",             "Wind direction 2 m (°)",                 _ALL),
-    ("WDIR2MSTD",       "wdir_std",         "Wind direction 2 m std dev (°)",         _ALL),
-    ("WSPD10MAVG",      "wspd10m",          "Wind speed 10 m avg (m s⁻¹)",           _ALL),
-    ("WSPD10MMAX",      "wspd10m_max",      "Wind speed 10 m max (m s⁻¹)",           _D5),
-    ("WDIR10M",         "wdir10m",          "Wind direction 10 m (°)",                _ALL),
-    ("WDIR10MSTD",      "wdir10m_std",      "Wind direction 10 m std dev (°)",        _ALL),
+    ("WSPD2MAVG",       "wspd_2m_avg",             "Wind speed 2 m avg (m s⁻¹)",            _ALL),
+    ("WSPD2MMAX",       "wspd_2m_max",         "Wind speed 2 m max (m s⁻¹)",            _D5),
+    ("WDIR2M",          "wdir_2m",             "Wind direction 2 m (°)",                 _ALL),
+    ("WDIR2MSTD",       "wdir_2m_std",         "Wind direction 2 m std dev (°)",         _ALL),
+    ("WSPD10MAVG",      "wspd_10m_avg",          "Wind speed 10 m avg (m s⁻¹)",           _ALL),
+    ("WSPD10MMAX",      "wspd_10m_max",      "Wind speed 10 m max (m s⁻¹)",           _D5),
+    ("WDIR10M",         "wdir_10m",          "Wind direction 10 m (°)",                _ALL),
+    ("WDIR10MSTD",      "wdir_10m_std",      "Wind direction 10 m std dev (°)",        _ALL),
     # Soil temperature — dedicated probes
     ("SOILTMP5AVG",     "tsoil_5cm",        "Soil temperature 5 cm avg (°C)",         _ALL),
     ("SOILTMP5MIN",     "tsoil_5cm_min",    "Soil temperature 5 cm min (°C)",         _DONLY),
@@ -325,16 +325,6 @@ def request_data(
         logger.info("Done — %s | %d rows × %d variables", station, len(df_master), len(variables))
 
     cols = ["TIMESTAMP"] + [v for v in variables if v in df_master.columns]
-
-    vwc_requested = [v for v in variables if v in _ALL_VWC]
-    if vwc_requested:
-        logger.warning(
-            "VWC columns %s contain raw CS655 firmware values. "
-            "For KSU site-specific calibrated values, fetch the corresponding "
-            "SOILKA*CM and SOILEC*CM columns and call calibrate_vwc().",
-            vwc_requested,
-        )
-
     return df_master[cols]
 
 
@@ -425,29 +415,28 @@ def rename_columns(
 
 def calibrate_vwc(df: pd.DataFrame, vwc_cols: list[str] | None = None) -> pd.DataFrame:
     """
-    Apply the KSU CS655 calibration equation to produce VWC from Ka and EC.
+    Apply the KSU CS655 calibration equation, overwriting the raw VWC values.
 
     VWC = max(-0.115 + 0.0989 * sqrt(Ka) - 0.0572 * EC, 0)
 
-    Requires Ka (SOILKA*CM) and EC (SOILEC*CM) columns for each depth to
-    calibrate. The firmware VWC column (VWC*CM) does not need to be fetched —
-    it is created (or overwritten if already present) by this function.
-    Depths where Ka or EC are missing are skipped with a warning.
-    All other columns in df are unchanged.
+    The Mesonet API returns VWC computed by the CS655 firmware equation. This
+    function replaces those values with the KSU site-specific calibration for
+    any depth where Ka (SOILKA*CM) and EC (SOILEC*CM) are present. Depths
+    without Ka/EC are skipped with a warning. All other columns are unchanged.
 
     Parameters
     ----------
     df : pd.DataFrame
-        Must contain SOILKA*CM and SOILEC*CM columns for each depth requested.
+        Must contain SOILKA*CM and SOILEC*CM columns for each depth to calibrate.
     vwc_cols : list[str] or None
-        Target VWC column names. Any subset of
+        VWC columns to calibrate. Any subset of
         ['VWC5CM', 'VWC10CM', 'VWC20CM', 'VWC50CM'].
-        Defaults to all four depths (skipping any without Ka/EC).
+        Defaults to all depths found with matching Ka/EC columns.
 
     Returns
     -------
     pd.DataFrame
-        Copy of df with calibrated VWC columns added or overwritten.
+        Copy of df with VWC values replaced by calibrated equivalents.
     """
     df = df.copy()
     if vwc_cols is None:
@@ -518,7 +507,7 @@ def srad_to_mj(srad: Union[float, np.ndarray], period: Union[int, float]) -> Uni
     srad : float or array-like
         Mean solar irradiance (W m⁻²).
     period : int or float
-        Integration period in seconds (e.g. 86400 for one day, 3600 for one hour).
+        Integration period in seconds (e.g. 86400 for one day).
     """
     return np.asarray(srad) * period / 1_000_000
 
@@ -826,10 +815,7 @@ def reference_et_hargreaves(
     Requires only temperature and location; useful when humidity, radiation,
     and wind data are unavailable.
 
-    ETo = 0.0023 * (0.408 * Ra) * (tmean + 17.8) * sqrt(tmax - tmin)
-
-    The coefficient 0.0023 expects Ra in mm day⁻¹ equivalent; multiplying
-    Ra (MJ m⁻² day⁻¹) by 0.408 performs that conversion (FAO-56 notation).
+    ETo = 0.0023 * Ra * (tmean + 17.8) * sqrt(tmax - tmin)
 
     Parameters
     ----------
@@ -855,7 +841,5 @@ def reference_et_hargreaves(
     tmax  = np.asarray(tmax,  dtype=float)
     tmean = np.asarray(tmean, dtype=float) if tmean is not None else (tmin + tmax) / 2.0
     Ra    = extraterrestrial_radiation(doy, lat)
-    # The coefficient 0.0023 expects Ra in mm day⁻¹ equivalent.
-    # Multiply Ra (MJ m⁻² day⁻¹) by 0.408 to convert (FAO-56 notation; 1/2.45 ≈ 0.408).
-    ETo   = 0.0023 * (0.408 * Ra) * (tmean + 17.8) * np.sqrt(np.maximum(tmax - tmin, 0.0))
+    ETo   = 0.0023 * Ra * (tmean + 17.8) * np.sqrt(np.maximum(tmax - tmin, 0.0))
     return np.round(ETo, 2), np.round(Ra, 2)
