@@ -37,7 +37,9 @@ Run this in your terminal
 ksmesopy-app
 ```
 
-A GUI for selecting stations, date ranges, variables, and intervals, with a tabular view and time-series chart. Exports to CSV and PNG.
+![Graphical User Interface](app_demo.gif)
+
+A GUI for selecting stations, date ranges, variables, and intervals, with a tabular view and time-series chart. Exports data to CSV and charts as PNG.
 
 ---
 
