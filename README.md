@@ -80,10 +80,10 @@ A GUI for selecting stations, date ranges, variables, and intervals, with a tabu
 
 | Function | Returns | Description |
 |---|---|---|
-| `reference_et_penman_monteith(doy, lat, elev, tmin, tmax, srad, wspd, rhmin, rhmax, *, vpd, ea, wind_height)` | `(ETo, Ra)` | FAO-56 Penman-Monteith. Supply vapour pressure via `ea=`, `vpd=`, or `rhmin=`+`rhmax=`. `srad` in W m⁻², converted internally. |
-| `reference_et_hargreaves(doy, lat, tmin, tmax, *, tmean)` | `(ETo, Ra)` | Hargreaves–Samani. Temperature only — no humidity, radiation, or wind needed. |
+| `reference_et_penman_monteith(doy, lat, elev, tmin, tmax, srad, wspd, rhmin, rhmax, *, vpd, ea, wind_height)` | `ndarray` | FAO-56 Penman-Monteith. Supply vapour pressure via `ea=`, `vpd=`, or `rhmin=`+`rhmax=`. `srad` in W m⁻², converted internally. |
+| `reference_et_hargreaves(doy, lat, tmin, tmax, *, tmean)` | `ndarray` | Hargreaves–Samani. Temperature only — no humidity, radiation, or wind needed. |
 
-Both return `(ETo [mm day⁻¹], Ra [MJ m⁻² day⁻¹])`.
+Both return ETo (mm day⁻¹) as an `ndarray`. Use `extraterrestrial_radiation(doy, lat)` if you also need Ra.
 
 ### Atmospheric helpers
 
@@ -116,10 +116,6 @@ ms.plot_precip(axes[1], df, "PRECIP")
 ms.plot_humidity(axes[2], df, "RELHUM2MAVG")
 ms.plot_solar_radiation(axes[3], df, ["SRAVG", "Ra"])  # Ra drawn dashed
 ms.plot_vwc(axes[4], df)                               # auto-detects VWC columns
-
-plt.tight_layout()
-plt.savefig("meteogram.png", dpi=150)
-```
 
 plt.tight_layout()
 plt.savefig("meteogram.png", dpi=150)

@@ -1,31 +1,17 @@
 """
 ksmesopy.charts
 ===============
-Axes-level plot functions for Kansas Mesonet data.
-
-Each function draws onto a Matplotlib Axes object supplied by the caller,
-so panels compose freely inside any figure layout:
+Axes-level plot functions for Kansas Mesonet data. Each function draws onto a
+Matplotlib Axes supplied by the caller, so panels compose freely:
 
     fig, axes = plt.subplots(4, 1, sharex=True, figsize=(12, 10))
     ms.plot_temperature(axes[0], df, ["TEMP2MAVG", "TEMP2MMIN", "TEMP2MMAX"])
     ms.plot_precip(axes[1], df, "PRECIP")
     ms.plot_humidity(axes[2], df, "RELHUM2MAVG")
     ms.plot_solar_radiation(axes[3], df, "SRAVG")
-    plt.tight_layout()
 
-Column names can be API names (TEMP2MAVG) or snake_case (t2m) — whichever
-is present in the DataFrame after an optional rename_columns() call.
-
-Functions
----------
-plot_temperature(ax, df, variables, *, band, ylabel, legend)
-plot_precip(ax, df, variable, *, ylabel, color)
-plot_humidity(ax, df, variables, *, ylabel, legend)
-plot_vpd(ax, df, variables, *, ylabel, legend)
-plot_solar_radiation(ax, df, variables, *, ylabel, legend)
-plot_wind(ax, df, speed, direction, *, ylabel, legend)
-plot_vwc(ax, df, variables, *, ylabel, legend)
-plot_et(ax, df, variables, *, bar, ylabel, legend)
+Column names may be API names (TEMP2MAVG) or snake_case (tair_2m_avg) —
+whichever is present after an optional rename_columns() call.
 """
 
 from __future__ import annotations
@@ -34,7 +20,6 @@ from typing import Union
 
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-import matplotlib.cm as cm
 import numpy as np
 import pandas as pd
 
@@ -43,49 +28,43 @@ import pandas as pd
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-# Default color cycle — distinct, colorblind-friendly
+# Distinct, colorblind-friendly cycle
 _COLORS = ["#2563eb", "#dc2626", "#16a34a", "#d97706", "#7c3aed", "#0891b2", "#be185d"]
 
-# Column label lookup: covers both API names and snake_case equivalents
+# Display labels covering both API and snake_case column names
 _LABELS: dict[str, str] = {
-    # Temperature
-    "TEMP2MAVG":       "T 2 m avg",    "tair_2m_avg":             "T 2 m avg",
-    "TEMP2MMIN":       "T 2 m min",    "tair_2m_min":         "T 2 m min",
-    "TEMP2MMAX":       "T 2 m max",    "tair_2m_max":         "T 2 m max",
-    "TEMP10MAVG":      "T 10 m avg",   "tair_10m_avg":            "T 10 m avg",
-    "TEMP10MMIN":      "T 10 m min",   "tair_10m_min":        "T 10 m min",
-    "TEMP10MMAX":      "T 10 m max",   "tair_10m_max":        "T 10 m max",
-    "SOILTMP5AVG":     "Ts 5 cm",      "tsoil_5cm":       "Ts 5 cm",
-    "SOILTMP10AVG":    "Ts 10 cm",     "tsoil_10cm":      "Ts 10 cm",
-    "SOILTMP5AVG655":  "Ts 5 cm",      "tsoil_5cm_655":   "Ts 5 cm",
-    "SOILTMP10AVG655": "Ts 10 cm",     "tsoil_10cm_655":  "Ts 10 cm",
-    "SOILTMP20AVG655": "Ts 20 cm",     "tsoil_20cm_655":  "Ts 20 cm",
-    "SOILTMP50AVG655": "Ts 50 cm",     "tsoil_50cm_655":  "Ts 50 cm",
-    # Pressure
-    "PRESSUREAVG":     "P",            "pressure_avg":    "P",
-    # Humidity
-    "RELHUM2MAVG":     "RH avg",       "rh_2m_avg":              "RH avg",
-    "RELHUM2MMIN":     "RH min",       "rh_2m_min":          "RH min",
-    "RELHUM2MMAX":     "RH max",       "rh_2m_max":          "RH max",
-    "VPDEFAVG":        "VPD",          "vpd_avg":             "VPD",
+    "TEMP2MAVG":       "T 2 m avg",   "tair_2m_avg":     "T 2 m avg",
+    "TEMP2MMIN":       "T 2 m min",   "tair_2m_min":     "T 2 m min",
+    "TEMP2MMAX":       "T 2 m max",   "tair_2m_max":     "T 2 m max",
+    "TEMP10MAVG":      "T 10 m avg",  "tair_10m_avg":    "T 10 m avg",
+    "TEMP10MMIN":      "T 10 m min",  "tair_10m_min":    "T 10 m min",
+    "TEMP10MMAX":      "T 10 m max",  "tair_10m_max":    "T 10 m max",
+    "SOILTMP5AVG":     "Ts 5 cm",     "tsoil_5cm":       "Ts 5 cm",
+    "SOILTMP10AVG":    "Ts 10 cm",    "tsoil_10cm":      "Ts 10 cm",
+    "SOILTMP5AVG655":  "Ts 5 cm",     "tsoil_5cm_655":   "Ts 5 cm",
+    "SOILTMP10AVG655": "Ts 10 cm",    "tsoil_10cm_655":  "Ts 10 cm",
+    "SOILTMP20AVG655": "Ts 20 cm",    "tsoil_20cm_655":  "Ts 20 cm",
+    "SOILTMP50AVG655": "Ts 50 cm",    "tsoil_50cm_655":  "Ts 50 cm",
+    "PRESSUREAVG":     "P",           "pressure_avg":    "P",
+    "RELHUM2MAVG":     "RH avg",      "rh_2m_avg":       "RH avg",
+    "RELHUM2MMIN":     "RH min",      "rh_2m_min":       "RH min",
+    "RELHUM2MMAX":     "RH max",      "rh_2m_max":       "RH max",
+    "VPDEFAVG":        "VPD",         "vpd_avg":         "VPD",
     "VPD_calc":        "VPD (calc)",
-    # Radiation
-    "SRAVG":           "Rs",           "srad":            "Rs",
+    "SRAVG":           "Rs",          "srad":            "Rs",
     "Rs_MJ":           "Rs",
-    "Ra_Wm2":          "Ra",           "Ra_MJ":           "Ra",    # Wind
-    "WSPD2MAVG":       "u 2 m",        "wspd_2m_avg":            "u 2 m",
-    "WSPD2MMAX":       "u 2 m max",    "wspd_2m_max":        "u 2 m max",
-    "WSPD10MAVG":      "u 10 m",       "wspd_10m_avg":         "u 10 m",
-    "WSPD10MMAX":      "u 10 m max",   "wspd_10m_max":     "u 10 m max",
-    "WDIR2M":          "Dir 2 m",      "wdir_2m":            "Dir 2 m",
-    "WDIR10M":         "Dir 10 m",     "wdir_10m":         "Dir 10 m",
-    # Precipitation
-    "PRECIP":          "Precip",       "precip":          "Precip",
-    # VWC
-    "VWC5CM":          "VWC 5 cm",     "vwc_5cm":         "VWC 5 cm",
-    "VWC10CM":         "VWC 10 cm",    "vwc_10cm":        "VWC 10 cm",
-    "VWC20CM":         "VWC 20 cm",    "vwc_20cm":        "VWC 20 cm",
-    "VWC50CM":         "VWC 50 cm",    "vwc_50cm":        "VWC 50 cm",
+    "Ra_Wm2":          "Ra",          "Ra_MJ":           "Ra",
+    "WSPD2MAVG":       "u 2 m",       "wspd_2m_avg":     "u 2 m",
+    "WSPD2MMAX":       "u 2 m max",   "wspd_2m_max":     "u 2 m max",
+    "WSPD10MAVG":      "u 10 m",      "wspd_10m_avg":    "u 10 m",
+    "WSPD10MMAX":      "u 10 m max",  "wspd_10m_max":    "u 10 m max",
+    "WDIR2M":          "Dir 2 m",     "wdir_2m":         "Dir 2 m",
+    "WDIR10M":         "Dir 10 m",    "wdir_10m":        "Dir 10 m",
+    "PRECIP":          "Precip",      "precip":          "Precip",
+    "VWC5CM":          "VWC 5 cm",    "vwc_5cm":         "VWC 5 cm",
+    "VWC10CM":         "VWC 10 cm",   "vwc_10cm":        "VWC 10 cm",
+    "VWC20CM":         "VWC 20 cm",   "vwc_20cm":        "VWC 20 cm",
+    "VWC50CM":         "VWC 50 cm",   "vwc_50cm":        "VWC 50 cm",
 }
 
 
@@ -102,14 +81,12 @@ def _ts(df: pd.DataFrame) -> pd.Series:
 
 
 def _setup_ax(ax: plt.Axes) -> None:
-    """Apply shared grid and date-formatting defaults."""
     ax.grid(True, alpha=0.25, linewidth=0.6)
     ax.xaxis.set_major_formatter(mdates.AutoDateFormatter(ax.xaxis.get_major_locator()))
     ax.tick_params(axis="x", rotation=30)
 
 
 def _get_ax(ax: plt.Axes | None) -> plt.Axes:
-    """Return ax if supplied, otherwise create and return a new figure's axes."""
     if ax is None:
         _, ax = plt.subplots(figsize=(12, 3.5))
     return ax
@@ -139,33 +116,11 @@ def plot_temperature(
     legend:  bool = True,
 ) -> plt.Axes:
     """
-    Plot one or more temperature series on *ax*.
+    Plot one or more temperature series on *ax* (air or soil).
 
-    Works for air temperature (TEMP2MAVG, TEMP2MMIN, TEMP2MMAX, …) and
-    soil temperature (SOILTMP*AVG, SOILTMP*AVG655) columns. Call twice to
-    overlay air and soil temperatures on the same axes.
-
-    Parameters
-    ----------
-    ax : plt.Axes
-        Target axes.
-    df : pd.DataFrame
-        Must contain TIMESTAMP (or timestamp) and all requested columns.
-    variables : str or list[str]
-        Column names to plot.
-    band : bool, default True
-        When a min/max pair is detected alongside an avg column for the same
-        sensor (e.g. TEMP2MMIN + TEMP2MMAX + TEMP2MAVG), draw a shaded band
-        between min and max. The avg line is drawn on top.
-    ylabel : str
-        Y-axis label.
-    legend : bool, default True
-        Show a legend.
-
-    Returns
-    -------
-    plt.Axes
-        The axes that was drawn on.
+    When band=True and a min/max pair is present alongside an avg column for
+    the same sensor, draw a shaded band between min and max with the avg line
+    on top. Call twice to overlay air and soil on the same axes.
     """
     cols = _as_list(variables)
     _require(df, cols)
@@ -173,16 +128,13 @@ def plot_temperature(
     ax = _get_ax(ax)
     _setup_ax(ax)
 
-    # Detect min/max/avg triplets for the band
-    # Canonical pairing: a col ending in MIN and one in MAX share a prefix
-    # Works for both API names (TEMP2MMIN/MAX) and snake names (t2m_min/max)
     plotted: set[str] = set()
 
     if band:
         pairs: list[tuple[str, str, str | None]] = []  # (min_col, max_col, avg_col)
         remaining = list(cols)
 
-        def _strip_suffix(c: str, suffixes: list[str]) -> str | None:
+        def _strip_suffix(c: str, suffixes: tuple[str, ...]) -> str | None:
             for s in suffixes:
                 if c.endswith(s):
                     return c[: -len(s)]
@@ -196,8 +148,7 @@ def plot_temperature(
             if base is None:
                 continue
             max_col = next(
-                (x for x in remaining
-                 if any(x == base + s for s in max_suffixes)),
+                (x for x in remaining if any(x == base + s for s in max_suffixes)),
                 None,
             )
             if max_col:
@@ -222,11 +173,10 @@ def plot_temperature(
                         linewidth=1.4, color=color, label=_label(avg))
                 plotted.update({mn, mx, avg})
             else:
-                # No avg — label the band by its min column's base name
-                ax.plot([], [], color=color, linewidth=1.4, label=_label(mn).replace(" min", ""))
+                ax.plot([], [], color=color, linewidth=1.4,
+                        label=_label(mn).replace(" min", ""))
                 plotted.update({mn, mx})
 
-    # Remaining columns plotted as plain lines
     remaining_cols = [c for c in cols if c not in plotted]
     for i, col in enumerate(remaining_cols):
         color = _COLORS[(len(plotted) // 3 + i) % len(_COLORS)]
@@ -248,33 +198,14 @@ def plot_precip(
     ylabel: str = "Precipitation (mm)",
     color:  str = "#2563eb",
 ) -> plt.Axes:
-    """
-    Plot precipitation as a bar chart on *ax*.
-
-    Parameters
-    ----------
-    ax : plt.Axes
-        Target axes.
-    df : pd.DataFrame
-        Must contain TIMESTAMP (or timestamp) and the precipitation column.
-    variable : str, default 'PRECIP'
-        Column name (PRECIP or precip).
-    ylabel : str
-        Y-axis label.
-    color : str
-        Bar fill color.
-
-    Returns
-    -------
-    plt.Axes
-    """
+    """Plot precipitation as a bar chart on *ax*."""
     _require(df, [variable])
     t = _ts(df)
     ax = _get_ax(ax)
     _setup_ax(ax)
 
     mask = df[variable].notna()
-    # Bar width: infer from timestamp spacing, default to 0.8 days
+    # Bar width from timestamp spacing, default 0.8 days
     if mask.sum() > 1:
         dt = (t[mask].iloc[1] - t[mask].iloc[0]).total_seconds() / 86400
         width = dt * 0.8
@@ -294,26 +225,7 @@ def plot_humidity(
     ylabel: str = "Relative humidity (%)",
     legend: bool = True,
 ) -> plt.Axes:
-    """
-    Plot relative humidity on *ax*.
-
-    Parameters
-    ----------
-    ax : plt.Axes
-        Target axes.
-    df : pd.DataFrame
-        Must contain TIMESTAMP (or timestamp) and all requested columns.
-    variables : str or list[str], default 'RELHUM2MAVG'
-        Column name(s) (RELHUM2MAVG, rh, RELHUM2MMIN, …).
-    ylabel : str
-        Y-axis label.
-    legend : bool, default True
-        Show a legend when more than one column is plotted.
-
-    Returns
-    -------
-    plt.Axes
-    """
+    """Plot relative humidity on *ax*."""
     cols = _as_list(variables)
     _require(df, cols)
     t = _ts(df)
@@ -340,27 +252,7 @@ def plot_vpd(
     ylabel: str = "VPD (kPa)",
     legend: bool = True,
 ) -> plt.Axes:
-    """
-    Plot vapor pressure deficit on *ax*.
-
-    Parameters
-    ----------
-    ax : plt.Axes
-        Target axes.
-    df : pd.DataFrame
-        Must contain TIMESTAMP (or timestamp) and all requested columns.
-    variables : str or list[str], default 'VPDEFAVG'
-        Column name(s). Accepts measured VPD (VPDEFAVG / vpd) or values
-        computed by vapor_pressure_deficit().
-    ylabel : str
-        Y-axis label.
-    legend : bool, default True
-        Show a legend when more than one column is plotted.
-
-    Returns
-    -------
-    plt.Axes
-    """
+    """Plot vapor pressure deficit on *ax* (measured or computed)."""
     cols = _as_list(variables)
     _require(df, cols)
     t = _ts(df)
@@ -393,26 +285,8 @@ def plot_solar_radiation(
     """
     Plot solar radiation on *ax* as a filled area.
 
-    Can plot observed (SRAVG / srad) and extraterrestrial radiation (Ra)
-    together on the same axes — Ra is drawn as a dashed envelope above the
-    observed signal.
-
-    Parameters
-    ----------
-    ax : plt.Axes, optional
-        Target axes. A new figure is created if not supplied.
-    df : pd.DataFrame
-        Must contain TIMESTAMP (or timestamp) and all requested columns.
-    variables : str or list[str], default 'SRAVG'
-        Column name(s). Ra columns are detected by name and drawn dashed.
-    ylabel : str, default 'Solar radiation (W m⁻²)'
-        Y-axis label.
-    legend : bool, default True
-        Show a legend when more than one column is plotted.
-
-    Returns
-    -------
-    plt.Axes
+    Observed radiation (SRAVG / srad) is filled; extraterrestrial radiation
+    (Ra columns, detected by name) is drawn as a dashed envelope.
     """
     cols = _as_list(variables)
     _require(df, cols)
@@ -420,9 +294,6 @@ def plot_solar_radiation(
     ax = _get_ax(ax)
     _setup_ax(ax)
 
-    # Heuristic: columns that represent extraterrestrial / potential radiation
-    # are drawn as dashed envelopes rather than filled areas.
-    # Matches: "Ra", "Ra_Wm2", "ra_mj", "extraterrestrial", etc.
     def _is_ra(col: str) -> bool:
         c = col.lower()
         return c == "ra" or c.startswith("ra_") or "extra" in c
@@ -454,32 +325,10 @@ def plot_wind(
     legend: bool = True,
 ) -> plt.Axes:
     """
-    Plot wind speed as a line and, optionally, wind direction as a scatter.
+    Plot wind speed as a line and, optionally, direction as a scatter.
 
-    Direction is overlaid on a twin y-axis (0–360°) so the two signals share
-    the same x-axis without distorting the speed scale. Direction markers are
-    small and semi-transparent to avoid cluttering the speed line.
-
-    Parameters
-    ----------
-    ax : plt.Axes
-        Target axes (used for wind speed).
-    df : pd.DataFrame
-        Must contain TIMESTAMP (or timestamp) and the speed column.
-    speed : str, default 'WSPD2MAVG'
-        Wind speed column (WSPD2MAVG, wspd, WSPD10MAVG, …).
-    direction : str or None, default None
-        Wind direction column (WDIR2M, wdir, …). If None, direction is
-        not plotted.
-    ylabel : str
-        Y-axis label for the speed axis.
-    legend : bool, default True
-        Show a legend.
-
-    Returns
-    -------
-    plt.Axes
-        The speed axes (not the twin direction axes).
+    Direction is overlaid on a twin y-axis (0–360°) so both signals share the
+    x-axis without distorting the speed scale. Returns the speed axes.
     """
     _require(df, [speed] + ([direction] if direction else []))
     t = _ts(df)
@@ -524,30 +373,9 @@ def plot_vwc(
     """
     Plot volumetric water content on *ax*.
 
-    Defaults to all four standard VWC depths if *variables* is None and
-    those columns are present in the DataFrame. When multiple depths are
-    plotted, a sequential colormap (blue → brown) maps shallow to deep,
-    giving an intuitive depth gradient.
-
-    Parameters
-    ----------
-    ax : plt.Axes
-        Target axes.
-    df : pd.DataFrame
-        Must contain TIMESTAMP (or timestamp) and all requested columns.
-    variables : str or list[str] or None
-        Column name(s). Defaults to all VWC*CM / vwc_* columns found
-        in the DataFrame.
-    ylabel : str
-        Y-axis label.
-    legend : bool, default True
-        Show a legend.
-
-    Returns
-    -------
-    plt.Axes
+    Defaults to all four standard VWC depths present in the DataFrame. When
+    multiple depths are plotted, a sequential colormap maps shallow to deep.
     """
-    # Default: discover VWC columns present in the DataFrame
     _VWC_ORDER = [
         "VWC5CM", "VWC10CM", "VWC20CM", "VWC50CM",
         "vwc_5cm", "vwc_10cm", "vwc_20cm", "vwc_50cm",
@@ -563,8 +391,8 @@ def plot_vwc(
     ax = _get_ax(ax)
     _setup_ax(ax)
 
-    # Depth colormap: shallow = blue, deep = brown
-    cmap = cm.get_cmap("YlOrBr", len(cols) + 1)
+    # Depth colormap: shallow -> deep
+    cmap = plt.get_cmap("YlOrBr", len(cols) + 1)
     colors = [cmap(i + 1) for i in range(len(cols))]
 
     for col, color in zip(cols, colors):
@@ -590,26 +418,7 @@ def plot_et(
     """
     Plot reference evapotranspiration on *ax*.
 
-    Parameters
-    ----------
-    ax : plt.Axes
-        Target axes.
-    df : pd.DataFrame
-        Must contain TIMESTAMP (or timestamp) and all requested columns.
-        Typically populated from reference_et_penman_monteith() or
-        reference_et_hargreaves().
-    variables : str or list[str]
-        Column name(s) holding ETo values.
-    bar : bool, default False
-        Draw as a bar chart (appropriate for daily totals) instead of a line.
-    ylabel : str
-        Y-axis label.
-    legend : bool, default True
-        Show a legend when more than one column is plotted.
-
-    Returns
-    -------
-    plt.Axes
+    Set bar=True to draw daily totals as bars instead of a line.
     """
     cols = _as_list(variables)
     _require(df, cols)

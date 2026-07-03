@@ -33,10 +33,8 @@ net_radiation(srad_mj, tmin, tmax, ea, elev, doy, lat, *, alpha)
 Reference evapotranspiration
 -----------------------------
 reference_et_penman_monteith(doy, lat, elev, tmin, tmax, srad, wspd,
-                              rhmin, rhmax, *, vpd, ea, wind_height)
-                                     -> tuple[ndarray, ndarray]
-reference_et_hargreaves(doy, lat, tmin, tmax, *, tmean)
-                                     -> tuple[ndarray, ndarray]
+                              rhmin, rhmax, *, vpd, ea, wind_height)  -> ndarray
+reference_et_hargreaves(doy, lat, tmin, tmax, *, tmean)              -> ndarray
 """
 
 from __future__ import annotations
@@ -61,28 +59,28 @@ _D5    = frozenset({"5min", "day"})
 
 VARIABLES: list[tuple[str, str, str, frozenset]] = [
     # Atmospheric
-    ("TEMP2MAVG",       "tair_2m_avg",              "Air temperature 2 m avg (°C)",           _ALL),
-    ("TEMP2MMIN",       "tair_2m_min",          "Air temperature 2 m min (°C)",           _DONLY),
-    ("TEMP2MMAX",       "tair_2m_max",          "Air temperature 2 m max (°C)",           _DONLY),
-    ("TEMP10MAVG",      "tair_10m_avg",             "Air temperature 10 m avg (°C)",          _ALL),
-    ("TEMP10MMIN",      "tair_10m_min",         "Air temperature 10 m min (°C)",          _DONLY),
-    ("TEMP10MMAX",      "tair_10m_max",         "Air temperature 10 m max (°C)",          _DONLY),
-    ("RELHUM2MAVG",     "rh_2m_avg",               "Relative humidity 2 m avg (%)",          _ALL),
-    ("RELHUM2MMIN",     "rh_2m_min",           "Relative humidity 2 m min (%)",          _DONLY),
-    ("RELHUM2MMAX",     "rh_2m_max",           "Relative humidity 2 m max (%)",          _DONLY),
-    ("VPDEFAVG",        "vpd_avg",              "Vapor pressure deficit avg (kPa)",       _ALL),
-    ("PRESSUREAVG",     "pressure_avg",             "Atmospheric pressure avg (kPa)",         _ALL),
+    ("TEMP2MAVG",       "tair_2m_avg",      "Air temperature 2 m avg (°C)",           _ALL),
+    ("TEMP2MMIN",       "tair_2m_min",      "Air temperature 2 m min (°C)",           _DONLY),
+    ("TEMP2MMAX",       "tair_2m_max",      "Air temperature 2 m max (°C)",           _DONLY),
+    ("TEMP10MAVG",      "tair_10m_avg",     "Air temperature 10 m avg (°C)",          _ALL),
+    ("TEMP10MMIN",      "tair_10m_min",     "Air temperature 10 m min (°C)",          _DONLY),
+    ("TEMP10MMAX",      "tair_10m_max",     "Air temperature 10 m max (°C)",          _DONLY),
+    ("RELHUM2MAVG",     "rh_2m_avg",        "Relative humidity 2 m avg (%)",          _ALL),
+    ("RELHUM2MMIN",     "rh_2m_min",        "Relative humidity 2 m min (%)",          _DONLY),
+    ("RELHUM2MMAX",     "rh_2m_max",        "Relative humidity 2 m max (%)",          _DONLY),
+    ("VPDEFAVG",        "vpd_avg",          "Vapor pressure deficit avg (kPa)",       _ALL),
+    ("PRESSUREAVG",     "pressure_avg",     "Atmospheric pressure avg (kPa)",         _ALL),
     ("PRECIP",          "precip",           "Precipitation gauge 1 (mm)",             _ALL),
     ("PRECIP2",         "precip2",          "Precipitation gauge 2 (mm)",             _ALL),
     ("SRAVG",           "srad",             "Solar radiation avg (W m⁻²)",            _ALL),
-    ("WSPD2MAVG",       "wspd_2m_avg",             "Wind speed 2 m avg (m s⁻¹)",            _ALL),
-    ("WSPD2MMAX",       "wspd_2m_max",         "Wind speed 2 m max (m s⁻¹)",            _D5),
-    ("WDIR2M",          "wdir_2m",             "Wind direction 2 m (°)",                 _ALL),
-    ("WDIR2MSTD",       "wdir_2m_std",         "Wind direction 2 m std dev (°)",         _ALL),
-    ("WSPD10MAVG",      "wspd_10m_avg",          "Wind speed 10 m avg (m s⁻¹)",           _ALL),
-    ("WSPD10MMAX",      "wspd_10m_max",      "Wind speed 10 m max (m s⁻¹)",           _D5),
-    ("WDIR10M",         "wdir_10m",          "Wind direction 10 m (°)",                _ALL),
-    ("WDIR10MSTD",      "wdir_10m_std",      "Wind direction 10 m std dev (°)",        _ALL),
+    ("WSPD2MAVG",       "wspd_2m_avg",      "Wind speed 2 m avg (m s⁻¹)",            _ALL),
+    ("WSPD2MMAX",       "wspd_2m_max",      "Wind speed 2 m max (m s⁻¹)",            _D5),
+    ("WDIR2M",          "wdir_2m",          "Wind direction 2 m (°)",                 _ALL),
+    ("WDIR2MSTD",       "wdir_2m_std",      "Wind direction 2 m std dev (°)",         _ALL),
+    ("WSPD10MAVG",      "wspd_10m_avg",     "Wind speed 10 m avg (m s⁻¹)",           _ALL),
+    ("WSPD10MMAX",      "wspd_10m_max",     "Wind speed 10 m max (m s⁻¹)",           _D5),
+    ("WDIR10M",         "wdir_10m",         "Wind direction 10 m (°)",                _ALL),
+    ("WDIR10MSTD",      "wdir_10m_std",     "Wind direction 10 m std dev (°)",        _ALL),
     # Soil temperature — dedicated probes
     ("SOILTMP5AVG",     "tsoil_5cm",        "Soil temperature 5 cm avg (°C)",         _ALL),
     ("SOILTMP5MIN",     "tsoil_5cm_min",    "Soil temperature 5 cm min (°C)",         _DONLY),
@@ -460,9 +458,9 @@ def compute_soil_water_storage(df: pd.DataFrame) -> pd.DataFrame:
     """
     Compute soil water storage in the top 50 cm (mm) using the trapezoidal rule.
 
-    The 5 cm sensor is assigned to both the surface (0 cm) and the 5 cm node;
-    integration nodes are [0, 5, 10, 20, 50] cm. Rows with any NaN VWC
-    produce NaN storage.
+    VWC is integrated over depth nodes [0, 5, 10, 20, 50] cm (i.e. [0, 50,
+    100, 200, 500] mm), with the 5 cm sensor assigned to both the surface
+    (0 cm) and 5 cm nodes. Rows with any NaN VWC produce NaN storage.
 
     Requires all four VWC depth columns. Call calibrate_vwc() first if you
     want storage computed from calibrated values — the VWC column names are
@@ -760,10 +758,12 @@ def reference_et_penman_monteith(
 
     Returns
     -------
-    ETo : np.ndarray
+    np.ndarray
         Reference ET (mm day⁻¹), rounded to 2 decimal places.
-    Ra : np.ndarray
-        Extraterrestrial radiation (MJ m⁻² day⁻¹), rounded to 2 decimal places.
+
+    See Also
+    --------
+    extraterrestrial_radiation : compute Ra separately if you need it.
     """
     tmin = np.asarray(tmin, dtype=float)
     tmax = np.asarray(tmax, dtype=float)
@@ -788,7 +788,6 @@ def reference_et_penman_monteith(
     else:
         raise ValueError("Provide ea, vpd, or rhmin + rhmax.")
 
-    Ra    = extraterrestrial_radiation(doy, lat)
     Rn    = net_radiation(srad_mj, tmin, tmax, ea, elev, doy, lat)
     Delta = slope_saturation_vapor_pressure(tavg)
     gamma = psychrometric_constant(elev)
@@ -798,7 +797,7 @@ def reference_et_penman_monteith(
         (0.408 * Delta * Rn + gamma * (900.0 / (tavg + 273.0)) * u2 * vpd_c)
         / (Delta + gamma * (1.0 + 0.34 * u2))
     )
-    return np.round(ETo, 2), np.round(Ra, 2)
+    return np.round(ETo, 2)
 
 
 def reference_et_hargreaves(
@@ -808,7 +807,7 @@ def reference_et_hargreaves(
     tmax:  Union[float, np.ndarray],
     *,
     tmean: Union[float, np.ndarray] | None = None,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> np.ndarray:
     """
     Daily reference evapotranspiration by the Hargreaves-Samani (1985) method.
 
@@ -832,14 +831,16 @@ def reference_et_hargreaves(
 
     Returns
     -------
-    ETo : np.ndarray
+    np.ndarray
         Reference ET (mm day⁻¹), rounded to 2 decimal places.
-    Ra : np.ndarray
-        Extraterrestrial radiation (MJ m⁻² day⁻¹), rounded to 2 decimal places.
+
+    See Also
+    --------
+    extraterrestrial_radiation : compute Ra separately if you need it.
     """
     tmin  = np.asarray(tmin,  dtype=float)
     tmax  = np.asarray(tmax,  dtype=float)
     tmean = np.asarray(tmean, dtype=float) if tmean is not None else (tmin + tmax) / 2.0
     Ra    = extraterrestrial_radiation(doy, lat)
     ETo   = 0.0023 * Ra * (tmean + 17.8) * np.sqrt(np.maximum(tmax - tmin, 0.0))
-    return np.round(ETo, 2), np.round(Ra, 2)
+    return np.round(ETo, 2)
