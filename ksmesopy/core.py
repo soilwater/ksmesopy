@@ -435,6 +435,12 @@ def calibrate_vwc(df: pd.DataFrame, vwc_cols: list[str] | None = None) -> pd.Dat
     -------
     pd.DataFrame
         Copy of df with VWC values replaced by calibrated equivalents.
+
+    Reference
+    ---------
+    Patrignani, A., Ochsner, T. E., Feng, L., Dyer, D., & Rossini, P. R. (2022). 
+    Calibration and validation of soil water reflectometers. 
+    Vadose Zone Journal, 21(3), e20190. https://doi.org/10.1002/vzj2.20190
     """
     df = df.copy()
     if vwc_cols is None:
@@ -708,26 +714,20 @@ def net_radiation(
 # ---------------------------------------------------------------------------
 
 def reference_et_penman_monteith(
-    doy:   Union[int, np.ndarray],
+    doy:   Union[int,   np.ndarray],
     lat:   Union[float, np.ndarray],
     elev:  Union[float, np.ndarray],
     tmin:  Union[float, np.ndarray],
     tmax:  Union[float, np.ndarray],
     srad:  Union[float, np.ndarray],
     wspd:  Union[float, np.ndarray],
-    rhmin: Union[float, np.ndarray] | None = None,
-    rhmax: Union[float, np.ndarray] | None = None,
+    rhmin: Union[float, np.ndarray],
+    rhmax: Union[float, np.ndarray],
     *,
-    vpd:         Union[float, np.ndarray] | None = None,
-    ea:          Union[float, np.ndarray] | None = None,
-    wind_height: float = 2.0,
+    vpd: Union[float, np.ndarray] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Daily reference evapotranspiration by the FAO-56 Penman-Monteith method.
-
-    Actual vapor pressure must be supplied via one of three paths (checked in
-    this order): ea directly, vpd (ea is derived as es - vpd), or rhmin +
-    rhmax (ea = (es_min * rhmax + es_max * rhmin) / 2, FAO-56 Eq. 17).
 
     Parameters
     ----------
@@ -744,59 +744,59 @@ def reference_et_penman_monteith(
     srad : float or array-like
         Mean solar irradiance (W m⁻²); converted to MJ m⁻² day⁻¹ internally.
     wspd : float or array-like
-        Wind speed at wind_height (m s⁻¹).
-    rhmin : float or array-like, optional
+        Wind speed at 2 m (m s⁻¹).
+    rhmin : float or array-like
         Daily minimum relative humidity (%).
-    rhmax : float or array-like, optional
+    rhmax : float or array-like
         Daily maximum relative humidity (%).
     vpd : float or array-like, keyword-only, optional
-        Vapor pressure deficit (kPa).
-    ea : float or array-like, keyword-only, optional
-        Actual vapor pressure (kPa).
-    wind_height : float, default 2.0
-        Anemometer height (m). The Mesonet 2 m sensor gives a correction of 1.0.
+        Vapor pressure deficit (kPa). When provided, rhmin and rhmax are
+        still used for net longwave radiation but VPD is taken directly.
+        A scaling factor of 0.84 is applied when VPD is estimated from
+        rhmin and rhmax (FAO-56 Eq. 17).
 
     Returns
     -------
-    np.ndarray
+    ETo : np.ndarray
         Reference ET (mm day⁻¹), rounded to 2 decimal places.
-
-    See Also
-    --------
-    extraterrestrial_radiation : compute Ra separately if you need it.
     """
-    tmin = np.asarray(tmin, dtype=float)
-    tmax = np.asarray(tmax, dtype=float)
-    srad = np.asarray(srad, dtype=float)
-    wspd = np.asarray(wspd, dtype=float)
-    tavg = (tmin + tmax) / 2.0
+    tmin  = np.asarray(tmin,  dtype=float)
+    tmax  = np.asarray(tmax,  dtype=float)
+    srad  = np.asarray(srad,  dtype=float)
+    wspd  = np.asarray(wspd,  dtype=float)
+    rhmin = np.asarray(rhmin, dtype=float)
+    rhmax = np.asarray(rhmax, dtype=float)
+    tavg  = (tmin + tmax) / 2.0
 
-    u2      = wspd * (4.87 / np.log(67.8 * wind_height - 5.42))   # wind at 2 m, Eq. 47
+    # Wind speed correction to 2 m (Mesonet sensor is already at 2 m → factor = 1.0)
+    u2 = wspd * (4.87 / np.log(67.8 * 2.0 - 5.42))
+
     srad_mj = srad_to_mj(srad, 86_400)
 
     es_min = saturation_vapor_pressure(tmin)
     es_max = saturation_vapor_pressure(tmax)
     es     = (es_min + es_max) / 2.0
 
-    if ea is not None:
-        ea = np.asarray(ea, dtype=float)
-    elif vpd is not None:
-        ea = np.maximum(es - np.asarray(vpd, dtype=float), 0.0)
-    elif rhmin is not None and rhmax is not None:
-        ea = (es_min * np.asarray(rhmax, dtype=float) / 100.0
-              + es_max * np.asarray(rhmin, dtype=float) / 100.0) / 2.0
-    else:
-        raise ValueError("Provide ea, vpd, or rhmin + rhmax.")
+    # Actual vapor pressure from rhmin/rhmax (FAO-56 Eq. 17)
+    ea = (es_min * rhmax / 100.0 + es_max * rhmin / 100.0) / 2.0
 
-    Rn    = net_radiation(srad_mj, tmin, tmax, ea, elev, doy, lat)
+    # VPD: use supplied value or estimate with 0.84 scaling factor
+    if vpd is not None:
+        vpd = np.maximum(np.asarray(vpd, dtype=float), 0.0)
+    else:
+        vpd = np.maximum(0.84 * (es - ea), 0.0) # 0.84 was determined empirically for several mesonet stations.
+
+    Ra = extraterrestrial_radiation(doy, lat)
+    Rn = net_radiation(srad_mj, tmin, tmax, ea, elev, doy, lat)
+
     Delta = slope_saturation_vapor_pressure(tavg)
     gamma = psychrometric_constant(elev)
-    vpd_c = np.maximum(es - ea, 0.0)
 
     ETo = (
-        (0.408 * Delta * Rn + gamma * (900.0 / (tavg + 273.0)) * u2 * vpd_c)
+        (0.408 * Delta * Rn + gamma * (900.0 / (tavg + 273.0)) * u2 * vpd)
         / (Delta + gamma * (1.0 + 0.34 * u2))
     )
+
     return np.round(ETo, 2)
 
 
