@@ -814,7 +814,7 @@ def reference_et_hargreaves(
     Requires only temperature and location; useful when humidity, radiation,
     and wind data are unavailable.
 
-    ETo = 0.0023 * Ra * (tmean + 17.8) * sqrt(tmax - tmin)
+    ETo = 0.0023 * Ra * (tmean + 17.8) * sqrt(tmax - tmin) * 0.408
 
     Parameters
     ----------
@@ -842,5 +842,5 @@ def reference_et_hargreaves(
     tmax  = np.asarray(tmax,  dtype=float)
     tmean = np.asarray(tmean, dtype=float) if tmean is not None else (tmin + tmax) / 2.0
     Ra    = extraterrestrial_radiation(doy, lat)
-    ETo   = 0.0023 * Ra * (tmean + 17.8) * np.sqrt(np.maximum(tmax - tmin, 0.0))
+    ETo   = 0.0023 * Ra * (tmean + 17.8) * np.sqrt(np.maximum(tmax - tmin, 0.0)) * 0.408
     return np.round(ETo, 2)
