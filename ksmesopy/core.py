@@ -725,7 +725,7 @@ def reference_et_penman_monteith(
     rhmax: Union[float, np.ndarray],
     *,
     vpd: Union[float, np.ndarray] | None = None,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> np.ndarray:
     """
     Daily reference evapotranspiration by the FAO-56 Penman-Monteith method.
 
