@@ -11,6 +11,8 @@ list_variables(interval)             -> list[dict]
 request_data(station, start, end, interval, variables, *, verbose, sleep)
                                      -> pd.DataFrame
 request_data_multi(stations, ...)    -> dict[str, pd.DataFrame]
+request_snapshot(timestamp, interval, variables, *, verbose)
+                                     -> pd.DataFrame
 rename_columns(df, preset)           -> pd.DataFrame
 """
 
@@ -355,6 +357,95 @@ def request_data_multi(
             logger.info("Station %s (%d/%d)", stn, len(results) + 1, len(stations))
         results[stn] = request_data(stn, start, end, interval, variables, verbose=verbose, sleep=sleep)
     return results
+
+
+def request_snapshot(
+    timestamp: Union[str, pd.Timestamp],
+    interval:  Literal["5min", "hour", "day"],
+    variables: list[str],
+    *,
+    verbose:   bool = True,
+) -> pd.DataFrame:
+    """
+    Retrieve a single time step across *every* station in one request.
+
+    Where request_data() returns many timestamps for one station, this returns
+    one timestamp for every station in the network — a network-wide snapshot.
+    It wraps the Mesonet ``stn=all`` endpoint, restricted to a single instant
+    (the API's multi-day form is intentionally not exposed here).
+
+    For interval='day' the Mesonet stores each day's aggregate at 00:00 of the
+    following calendar day; as in request_data(), the returned TIMESTAMP is
+    shifted back so it reflects the observation date you asked for. A daily
+    snapshot for a given date therefore matches request_data() for that date.
+
+    Parameters
+    ----------
+    timestamp : str or pd.Timestamp
+        The instant to fetch. For interval='day' the time component is ignored
+        (normalized to midnight); for 'hour' it is floored to the hour; for
+        '5min' it is floored to the nearest 5-minute mark.
+    interval : {'5min', 'hour', 'day'}
+        Temporal resolution.
+    variables : list[str]
+        API variable names. Use list_variables() to see what is available.
+    verbose : bool, default True
+        Log progress at INFO level.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: TIMESTAMP, STATION, then the requested variables in order,
+        one row per station (sorted by station name). Missing values ('M')
+        are returned as NaN.
+
+    See Also
+    --------
+    request_data : many timestamps for a single station.
+    request_data_multi : many timestamps for several named stations.
+    """
+    _delta_map = {"day": "1D", "hour": "1h", "5min": "5min"}
+    if interval not in _delta_map:
+        raise ValueError(f"interval must be '5min', 'hour', or 'day'; got {interval!r}")
+
+    delta = pd.Timedelta(_delta_map[interval])
+    ts    = pd.to_datetime(timestamp)
+
+    if interval == "day":
+        ts = ts.normalize()
+    elif interval == "hour":
+        ts = ts.floor("h")
+    else:  # 5min
+        ts = ts.floor("5min")
+
+    # Daily aggregates live at 00:00 of the next day; query there and shift the
+    # label back so the caller sees the observation date (matches request_data).
+    api_ts = ts + delta if interval == "day" else ts
+
+    url = (
+        f"{_BASE_URL}/stationdata/"
+        f"?stn=all&int={interval}"
+        f"&t_start={api_ts.strftime(_TS_FMT)}"
+        f"&t_end={api_ts.strftime(_TS_FMT)}"
+        f"&vars={','.join(variables)}"
+    ).replace(" ", "%20")
+
+    if verbose:
+        fmt = "%Y-%m-%d" if interval == "day" else "%Y-%m-%d %H:%M"
+        logger.info("Snapshot — all stations | %s | %s", interval, ts.strftime(fmt))
+
+    df = _fetch_chunk(url, "all", verbose)
+
+    if not df.empty:
+        if interval == "day":
+            df["TIMESTAMP"] = df["TIMESTAMP"] - delta
+        df = df.sort_values("STATION").reset_index(drop=True)
+
+    if verbose:
+        logger.info("Done — snapshot | %d stations × %d variables", len(df), len(variables))
+
+    cols = ["TIMESTAMP", "STATION"] + [v for v in variables if v in df.columns]
+    return df[[c for c in cols if c in df.columns]]
 
 
 def rename_columns(

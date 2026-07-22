@@ -28,6 +28,14 @@ df = ms.request_data(
 # Optional: rename columns to snake_case
 df = ms.rename_columns(df)
 # TIMESTAMP → timestamp, TEMP2MAVG → tair_2m_avg, PRECIP → precip, …
+
+# Snapshot: every station at a single time step
+snap = ms.request_snapshot(
+    timestamp="2025-01-01",   # for 5min/hour, include a time e.g. "2025-01-01 14:30"
+    interval="day",
+    variables=["TEMP2MAVG", "PRECIP"],
+)
+# TIMESTAMP, STATION, TEMP2MAVG, PRECIP — one row per station
 ```
 
 ## Desktop app
@@ -59,6 +67,7 @@ A GUI for selecting stations, date ranges, variables, and intervals, with a tabu
 |---|---|---|
 | `request_data(station, start, end, interval, variables, *, verbose, sleep)` | `DataFrame` | Download data for one station. `interval` is `"day"`, `"hour"`, or `"5min"`. Daily timestamps are corrected from the Mesonet's next-day convention. |
 | `request_data_multi(stations, start, end, interval, variables, *, verbose, sleep)` | `dict[str, DataFrame]` | Same as above for a list of stations; returns one DataFrame per station. |
+| `request_snapshot(timestamp, interval, variables, *, verbose)` | `DataFrame` | One timestamp across **all** stations at once (the Mesonet `stn=all` endpoint). `interval` is `"day"`, `"hour"`, or `"5min"`. Returns one row per station with a `STATION` column. For `"day"`, the time component is ignored and the timestamp is corrected from the next-day convention, so results line up with `request_data()` for the same date. |
 | `list_variables(interval=None)` | `list[dict]` | Variable catalogue filtered by interval, or all variables if `None`. Each entry has keys `api_name`, `snake_name`, `description`, `intervals`. |
 | `rename_columns(df, preset="snake")` | `DataFrame` | Rename API column names to snake_case (e.g. `TEMP2MAVG` → `tair_2m_avg`). Pass a `dict` for a custom mapping. |
 
@@ -217,6 +226,8 @@ df.drop(columns="PRECIP2", inplace=True)
 ```
 
 **Daily timestamps.** The Mesonet API stores each day's aggregated values at 00:00 of the following calendar day. `request_data()` corrects for this automatically; the returned `TIMESTAMP` always reflects the observation date.
+
+**Network snapshots.** `request_snapshot()` fetches one time step for every station in a single call — handy for mapping a variable across Kansas on a given day or 5-minute mark. It's restricted to a single instant by design; for a time series at one station use `request_data()`. Daily snapshots use the same next-day correction as `request_data()`, so the two agree for any given date.
 
 **Missing values.** The API encodes missing observations as `"M"`. These are converted to `NaN` on read. Periods before a station or sensor was installed are pre-filled with `NaN` rather than omitted.
 
