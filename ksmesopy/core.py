@@ -119,6 +119,28 @@ _POLITE_SLEEP = 0.8    # seconds between successful chunk requests
 
 
 # ---------------------------------------------------------------------------
+# Progress reporting
+# ---------------------------------------------------------------------------
+
+def _report(msg: str, verbose: bool) -> None:
+    """
+    Emit a progress message.
+
+    Always recorded on the package logger at DEBUG level, so applications that
+    configure logging can capture it.  When ``verbose`` is True the message is
+    also written straight to stdout (flushed) so it appears live in a terminal
+    or notebook without the caller having to set up logging first.
+    """
+    logger.debug(msg)
+    if verbose:
+        print(msg, flush=True)
+
+
+def _fmt_ts(ts: pd.Timestamp, interval: str) -> str:
+    return ts.strftime("%Y-%m-%d" if interval == "day" else "%Y-%m-%d %H:%M")
+
+
+# ---------------------------------------------------------------------------
 # Station metadata
 # ---------------------------------------------------------------------------
 
@@ -203,7 +225,7 @@ def request_data(
     interval:  Literal["5min", "hour", "day"],
     variables: list[str],
     *,
-    verbose:   bool = True,
+    verbose:   bool = False,
     sleep:     float = _POLITE_SLEEP,
 ) -> pd.DataFrame:
     """
@@ -229,8 +251,12 @@ def request_data(
         Temporal resolution.
     variables : list[str]
         API variable names.  Use list_variables() to see what is available.
-    verbose : bool, default True
-        Log progress at INFO level.
+    verbose : bool, default False
+        Print one line per chunk request in the form
+        ``station: start_date - end_date`` so long multi-year downloads show
+        progress, followed by a summary line when the station finishes.
+        Messages are also sent to the package logger at DEBUG level regardless
+        of this setting.
     sleep : float, default 0.8
         Seconds to wait between chunk requests.
 
@@ -281,7 +307,10 @@ def request_data(
 
         log_cur = (cur - delta) if interval == "day" else cur
         log_end = (chunk_end - delta) if interval == "day" else chunk_end
-        _log_chunk(station, log_cur, log_end, interval, verbose)
+        _report(
+            f"{station}: {_fmt_ts(log_cur, interval)} - {_fmt_ts(log_end, interval)}",
+            verbose,
+        )
 
         df_chunk = _fetch_chunk(url, station, verbose)
         if not df_chunk.empty:
@@ -298,8 +327,10 @@ def request_data(
     if interval == "day":
         df_master["TIMESTAMP"] = df_master["TIMESTAMP"] - delta
 
-    if verbose:
-        logger.info("Done — %s | %d rows × %d variables", station, len(df_master), len(variables))
+    _report(
+        f"{station}: done — {len(df_master)} rows × {len(variables)} variables",
+        verbose,
+    )
 
     cols = ["TIMESTAMP"] + [v for v in variables if v in df_master.columns]
     return df_master[cols]
@@ -314,16 +345,15 @@ def _fetch_chunk(url: str, station: str, verbose: bool) -> pd.DataFrame:
                 raise RuntimeError(
                     f"Request failed for {station!r} after {_MAX_RETRIES} attempts: {exc}"
                 ) from exc
-            if verbose:
-                logger.warning("Attempt %d/%d failed for %s: %s — retrying", attempt, _MAX_RETRIES, station, exc)
+            logger.warning(
+                "Attempt %d/%d failed for %s: %s — retrying",
+                attempt, _MAX_RETRIES, station, exc,
+            )
+            _report(
+                f"{station}: attempt {attempt}/{_MAX_RETRIES} failed ({exc}) — retrying",
+                verbose,
+            )
             time.sleep(_RETRY_SLEEP)
-
-
-def _log_chunk(station: str, start: pd.Timestamp, end: pd.Timestamp, interval: str, verbose: bool) -> None:
-    if not verbose:
-        return
-    fmt = "%Y-%m-%d" if interval == "day" else "%Y-%m-%d %H:%M"
-    logger.info("  %s  |  %s -> %s", station, start.strftime(fmt), end.strftime(fmt))
 
 
 def request_data_multi(
@@ -333,7 +363,7 @@ def request_data_multi(
     interval:  Literal["5min", "hour", "day"],
     variables: list[str],
     *,
-    verbose:   bool = True,
+    verbose:   bool = False,
     sleep:     float = _POLITE_SLEEP,
 ) -> dict[str, pd.DataFrame]:
     """
@@ -352,9 +382,8 @@ def request_data_multi(
         Keys are station names.
     """
     results: dict[str, pd.DataFrame] = {}
-    for stn in stations:
-        if verbose:
-            logger.info("Station %s (%d/%d)", stn, len(results) + 1, len(stations))
+    for i, stn in enumerate(stations, start=1):
+        _report(f"[{i}/{len(stations)}] {stn}", verbose)
         results[stn] = request_data(stn, start, end, interval, variables, verbose=verbose, sleep=sleep)
     return results
 
@@ -364,7 +393,7 @@ def request_snapshot(
     interval:  Literal["5min", "hour", "day"],
     variables: list[str],
     *,
-    verbose:   bool = True,
+    verbose:   bool = False,
 ) -> pd.DataFrame:
     """
     Retrieve a single time step across *every* station in one request.
@@ -389,8 +418,11 @@ def request_snapshot(
         Temporal resolution.
     variables : list[str]
         API variable names. Use list_variables() to see what is available.
-    verbose : bool, default True
-        Log progress at INFO level.
+    verbose : bool, default False
+        Print a one-line progress message in the form
+        ``all stations: timestamp``, followed by a summary line. Messages are
+        also sent to the package logger at DEBUG level regardless of this
+        setting.
 
     Returns
     -------
@@ -430,9 +462,7 @@ def request_snapshot(
         f"&vars={','.join(variables)}"
     ).replace(" ", "%20")
 
-    if verbose:
-        fmt = "%Y-%m-%d" if interval == "day" else "%Y-%m-%d %H:%M"
-        logger.info("Snapshot — all stations | %s | %s", interval, ts.strftime(fmt))
+    _report(f"all stations ({interval}): {_fmt_ts(ts, interval)}", verbose)
 
     df = _fetch_chunk(url, "all", verbose)
 
@@ -441,8 +471,10 @@ def request_snapshot(
             df["TIMESTAMP"] = df["TIMESTAMP"] - delta
         df = df.sort_values("STATION").reset_index(drop=True)
 
-    if verbose:
-        logger.info("Done — snapshot | %d stations × %d variables", len(df), len(variables))
+    _report(
+        f"all stations: done — {len(df)} stations × {len(variables)} variables",
+        verbose,
+    )
 
     cols = ["TIMESTAMP", "STATION"] + [v for v in variables if v in df.columns]
     return df[[c for c in cols if c in df.columns]]
