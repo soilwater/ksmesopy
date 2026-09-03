@@ -16,11 +16,8 @@ whichever is present after an optional rename_columns() call.
 
 from __future__ import annotations
 
-from typing import Union
-
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-import numpy as np
 import pandas as pd
 
 
@@ -98,7 +95,7 @@ def _require(df: pd.DataFrame, cols: list[str]) -> None:
         raise ValueError(f"Column(s) not found in DataFrame: {missing}")
 
 
-def _as_list(v: Union[str, list[str]]) -> list[str]:
+def _as_list(v: str | list[str]) -> list[str]:
     return [v] if isinstance(v, str) else list(v)
 
 
@@ -108,8 +105,8 @@ def _as_list(v: Union[str, list[str]]) -> list[str]:
 
 def plot_temperature(
     ax:        plt.Axes | None = None,
-    df:        pd.DataFrame = None,
-    variables: Union[str, list[str]] = None,
+    df:        pd.DataFrame | None = None,
+    variables: str | list[str] | None = None,
     *,
     band:    bool = True,
     ylabel:  str = "Temperature (°C)",
@@ -192,7 +189,7 @@ def plot_temperature(
 
 def plot_precip(
     ax:       plt.Axes | None = None,
-    df:       pd.DataFrame = None,
+    df:       pd.DataFrame | None = None,
     variable: str = "PRECIP",
     *,
     ylabel: str = "Precipitation (mm)",
@@ -219,8 +216,8 @@ def plot_precip(
 
 def plot_humidity(
     ax:        plt.Axes | None = None,
-    df:        pd.DataFrame = None,
-    variables: Union[str, list[str]] = "RELHUM2MAVG",
+    df:        pd.DataFrame | None = None,
+    variables: str | list[str] = "RELHUM2MAVG",
     *,
     ylabel: str = "Relative humidity (%)",
     legend: bool = True,
@@ -246,8 +243,8 @@ def plot_humidity(
 
 def plot_vpd(
     ax:        plt.Axes | None = None,
-    df:        pd.DataFrame = None,
-    variables: Union[str, list[str]] = "VPDEFAVG",
+    df:        pd.DataFrame | None = None,
+    variables: str | list[str] = "VPDEFAVG",
     *,
     ylabel: str = "VPD (kPa)",
     legend: bool = True,
@@ -276,8 +273,8 @@ def plot_vpd(
 
 def plot_solar_radiation(
     ax:        plt.Axes | None = None,
-    df:        pd.DataFrame = None,
-    variables: Union[str, list[str]] = "SRAVG",
+    df:        pd.DataFrame | None = None,
+    variables: str | list[str] = "SRAVG",
     *,
     ylabel: str = "Solar radiation (W m⁻²)",
     legend: bool = True,
@@ -317,7 +314,7 @@ def plot_solar_radiation(
 
 def plot_wind(
     ax:        plt.Axes | None = None,
-    df:        pd.DataFrame = None,
+    df:        pd.DataFrame | None = None,
     speed:     str = "WSPD2MAVG",
     direction: str | None = None,
     *,
@@ -364,8 +361,8 @@ def plot_wind(
 
 def plot_vwc(
     ax:        plt.Axes | None = None,
-    df:        pd.DataFrame = None,
-    variables: Union[str, list[str]] = None,
+    df:        pd.DataFrame | None = None,
+    variables: str | list[str] | None = None,
     *,
     ylabel: str = "VWC (m³ m⁻³)",
     legend: bool = True,
@@ -408,8 +405,8 @@ def plot_vwc(
 
 def plot_et(
     ax:        plt.Axes | None = None,
-    df:        pd.DataFrame = None,
-    variables: Union[str, list[str]] = None,
+    df:        pd.DataFrame | None = None,
+    variables: str | list[str] | None = None,
     *,
     bar:    bool = False,
     ylabel: str = "ET (mm day⁻¹)",

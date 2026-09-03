@@ -12,8 +12,6 @@ Tabs
 Run
 ---
     python -m ksmesopy.app
-    # or directly:
-    python ksmesoapp.py
 """
 
 import io
@@ -29,6 +27,7 @@ import pandas as pd
 
 import guile as gui
 import ksmesopy.core as core
+import ksmesopy.utils as utils
 
 # ---------------------------------------------------------------------------
 # GUI variable catalogue
@@ -127,7 +126,7 @@ _FALLBACK_STATIONS = sorted([
 
 def _load_stations():
     try:
-        names = core.get_stations()
+        names = core.get_stations(names_only=True)
         _stations_list.set(names)
         _station.set(names[0])
     except Exception as exc:
@@ -246,8 +245,8 @@ def fetch():
                 verbose=False,
             )
 
-            # Progress is visible via the status log; pipe core logger to _log
-            # (core uses logging.INFO; we use verbose=False and log manually)
+            # Progress is visible via the status log; core logs at DEBUG, so we
+            # keep verbose=False and log a single summary line manually here.
             _log(f"  {_station.value}  |  {_start_date.value[:10]} → {_end_date.value[:10]}")
 
             # Merge dual rain gauges: row-wise maximum, then drop PRECIP2
@@ -257,11 +256,11 @@ def fetch():
 
             # Apply KSU CS655 calibration — overwrites VWC columns with calibrated values
             if vwc_requested:
-                df = core.calibrate_vwc(df, vwc_requested)
+                df = utils.calibrate_vwc(df, vwc_requested)
 
             # Optional soil water storage (requires all four VWC depths)
             if _compute_storage.value and set(core._ALL_VWC).issubset(set(user_vars)):
-                df = core.compute_soil_water_storage(df)
+                df = utils.compute_soil_water_storage(df)
 
             # Column order: TIMESTAMP, user-requested vars, then Ka/EC deps
             # (fetched silently for calibration), then STORAGE_MM if computed.

@@ -6,9 +6,9 @@ trivial or well-known reference value. No network access is required — the
 data-retrieval functions (request_data, get_stations, ...) are exercised only
 for import/signature sanity, not called.
 
-Run:
-    python smoke_test.py          # plain, exits non-zero on failure
-    pytest smoke_test.py          # also works under pytest
+Run (from the repository root):
+    python -m ksmesopy.smoke_test   # plain, exits non-zero on failure
+    pytest ksmesopy/smoke_test.py   # also works under pytest
 
 References
 ----------
@@ -21,9 +21,9 @@ THI     : Mader et al. (2006), J. Anim. Sci. 84:1924.
 import numpy as np
 import pandas as pd
 
-import core as ms
-import utils
-import charts
+import ksmesopy as ms
+import ksmesopy.utils as utils
+import ksmesopy.charts as charts
 
 # Absolute tolerance for float comparisons (values are rounded to <= 4 dp).
 TOL = 1e-2
@@ -34,7 +34,7 @@ def approx(a, b, tol=TOL):
 
 
 # ---------------------------------------------------------------------------
-# core.py — vapor pressure & atmospheric helpers
+# utils.py — vapor pressure & atmospheric helpers
 # ---------------------------------------------------------------------------
 
 def test_saturation_vapor_pressure():
@@ -95,7 +95,7 @@ def test_net_radiation_positive_daytime():
 
 
 # ---------------------------------------------------------------------------
-# core.py — reference evapotranspiration
+# utils.py — reference evapotranspiration
 # ---------------------------------------------------------------------------
 
 def test_reference_et_penman_monteith_summer():
@@ -107,28 +107,58 @@ def test_reference_et_penman_monteith_summer():
     assert 4.0 <= float(eto) <= 9.0
 
 
-def test_reference_et_penman_monteith_ea_paths_agree():
-    # Supplying ea directly vs via vpd should give the same ETo.
-    es = (ms.saturation_vapor_pressure(18) + ms.saturation_vapor_pressure(32)) / 2
-    ea = 1.2
-    eto_ea = ms.reference_et_penman_monteith(
-        196, 39, 300, 18, 32, 300, 2, ea=ea)
-    eto_vpd = ms.reference_et_penman_monteith(
-        196, 39, 300, 18, 32, 300, 2, vpd=float(es - ea))
-    assert approx(eto_ea, eto_vpd)
+def test_reference_et_penman_monteith_vpd_override():
+    # An explicit vpd is honored: a drier atmosphere (larger vpd) must yield a
+    # larger ETo than a humid one, all else equal.
+    common = dict(doy=196, lat=39, elev=300, tmin=18, tmax=32,
+                  srad=300, wspd=2, rhmin=30, rhmax=80)
+    eto_dry   = ms.reference_et_penman_monteith(**common, vpd=3.0)
+    eto_humid = ms.reference_et_penman_monteith(**common, vpd=0.2)
+    assert float(eto_dry) > float(eto_humid)
+
+
+def test_reference_et_penman_monteith_vpd_without_rh():
+    # vpd may be supplied without rhmin/rhmax; ea is then derived as es - vpd.
+    # Result should closely match supplying the equivalent rh that yields
+    # roughly the same ea, and land in a sensible range.
+    eto = ms.reference_et_penman_monteith(
+        doy=196, lat=39, elev=300, tmin=18, tmax=32,
+        srad=300, wspd=2, vpd=1.5,
+    )
+    assert 4.0 <= float(eto) <= 9.0
+
+
+def test_reference_et_penman_monteith_requires_humidity():
+    # With neither rh nor vpd, the function must refuse rather than guess.
+    try:
+        ms.reference_et_penman_monteith(196, 39, 300, 18, 32, 300, 2)
+    except ValueError:
+        return
+    raise AssertionError("Expected ValueError when humidity is unspecified.")
+
+
+def test_reference_et_penman_monteith_wind_height():
+    # Wind measured at 10 m is adjusted down, so the same reading yields a
+    # lower ETo than if it were taken at 2 m.
+    common = dict(doy=196, lat=39, elev=300, tmin=18, tmax=32,
+                  srad=300, wspd=4, rhmin=30, rhmax=80)
+    eto_2m  = ms.reference_et_penman_monteith(**common, wind_height=2.0)
+    eto_10m = ms.reference_et_penman_monteith(**common, wind_height=10.0)
+    assert float(eto_10m) < float(eto_2m)
 
 
 def test_reference_et_hargreaves():
-    # Hargreaves-Samani: ETo = 0.0023 * Ra * (tmean + 17.8) * sqrt(tmax - tmin)
+    # Hargreaves-Samani with Ra in MJ m-2 day-1 needs the 0.408 MJ->mm factor:
+    # ETo = 0.0023 * Ra * (tmean + 17.8) * sqrt(tmax - tmin) * 0.408
     eto = ms.reference_et_hargreaves(doy=196, lat=40, tmin=10, tmax=25)
     ra = ms.extraterrestrial_radiation(196, 40)
     tmean = (10 + 25) / 2
-    expected = 0.0023 * float(ra) * (tmean + 17.8) * np.sqrt(25 - 10)
+    expected = 0.0023 * float(ra) * (tmean + 17.8) * np.sqrt(25 - 10) * 0.408
     assert approx(eto, round(expected, 2))
 
 
 # ---------------------------------------------------------------------------
-# core.py — soil processing
+# utils.py — soil processing
 # ---------------------------------------------------------------------------
 
 def test_calibrate_vwc():

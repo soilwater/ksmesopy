@@ -23,7 +23,7 @@ ksmesopy.utils
     Reference evapotranspiration
     -----------------------------
     reference_et_penman_monteith(doy, lat, elev, tmin, tmax, srad, wspd,
-                                  rhmin, rhmax, *, vpd, ea, wind_height)  -> ndarray
+                                  rhmin, rhmax, *, vpd, wind_height)  -> ndarray
     reference_et_hargreaves(doy, lat, tmin, tmax, *, tmean)              -> ndarray
 
     Others
@@ -35,8 +35,15 @@ ksmesopy.utils
 """
 
 from __future__ import annotations
-from typing import Union
+
+import logging
+
 import numpy as np
+import pandas as pd
+
+from ksmesopy.core import _ALL_VWC, _VWC_DEPS
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -121,11 +128,12 @@ def compute_soil_water_storage(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     depths  = np.array([0, 50, 100, 200, 500], dtype=float)  # mm
     vwc_arr = df[["VWC5CM", "VWC5CM", "VWC10CM", "VWC20CM", "VWC50CM"]].values
-    trapz   = getattr(np, "trapezoid", None) or np.trapz
+    # np.trapezoid (NumPy >= 2.0) supersedes the deprecated np.trapz; support both.
+    trapezoid = getattr(np, "trapezoid", None) or np.trapz
     df["STORAGE_MM"] = np.where(
         np.any(np.isnan(vwc_arr), axis=1),
         np.nan,
-        np.round([trapz(row, depths) for row in vwc_arr], 1),
+        np.round([trapezoid(row, depths) for row in vwc_arr], 1),
     )
     return df
 
@@ -134,7 +142,7 @@ def compute_soil_water_storage(df: pd.DataFrame) -> pd.DataFrame:
 # Atmospheric helpers
 # ---------------------------------------------------------------------------
 
-def srad_to_mj(srad: Union[float, np.ndarray], period: Union[int, float]) -> Union[float, np.ndarray]:
+def srad_to_mj(srad: float | np.ndarray, period: int | float) -> float | np.ndarray:
     """
     Convert mean solar irradiance (W m⁻²) to total energy (MJ m⁻²).
 
@@ -148,7 +156,7 @@ def srad_to_mj(srad: Union[float, np.ndarray], period: Union[int, float]) -> Uni
     return np.asarray(srad) * period / 1_000_000
 
 
-def atmospheric_pressure(elev: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+def atmospheric_pressure(elev: float | np.ndarray) -> float | np.ndarray:
     """
     Atmospheric pressure from elevation (FAO-56 Eq. 7).
 
@@ -165,7 +173,7 @@ def atmospheric_pressure(elev: Union[float, np.ndarray]) -> Union[float, np.ndar
     return 101.3 * ((293.0 - 0.0065 * np.asarray(elev, dtype=float)) / 293.0) ** 5.26
 
 
-def saturation_vapor_pressure(temp: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+def saturation_vapor_pressure(temp: float | np.ndarray) -> float | np.ndarray:
     """
     Saturation vapor pressure (FAO-56 Eq. 11).
 
@@ -183,7 +191,7 @@ def saturation_vapor_pressure(temp: Union[float, np.ndarray]) -> Union[float, np
     return 0.6108 * np.exp((17.27 * t) / (t + 237.3))
 
 
-def actual_vapor_pressure(temp: Union[float, np.ndarray], rh: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+def actual_vapor_pressure(temp: float | np.ndarray, rh: float | np.ndarray) -> float | np.ndarray:
     """
     Actual vapor pressure (FAO-56 Eq. 17).
 
@@ -202,7 +210,7 @@ def actual_vapor_pressure(temp: Union[float, np.ndarray], rh: Union[float, np.nd
     return saturation_vapor_pressure(temp) * (np.asarray(rh, dtype=float) / 100.0)
 
 
-def vapor_pressure_deficit(temp: Union[float, np.ndarray], rh: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+def vapor_pressure_deficit(temp: float | np.ndarray, rh: float | np.ndarray) -> float | np.ndarray:
     """
     Vapor pressure deficit, clipped to zero (FAO-56 Eq. 15).
 
@@ -221,7 +229,7 @@ def vapor_pressure_deficit(temp: Union[float, np.ndarray], rh: Union[float, np.n
     return np.maximum(saturation_vapor_pressure(temp) - actual_vapor_pressure(temp, rh), 0.0)
 
 
-def slope_saturation_vapor_pressure(temp: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+def slope_saturation_vapor_pressure(temp: float | np.ndarray) -> float | np.ndarray:
     """
     Slope of the saturation vapor pressure curve, Delta (FAO-56 Eq. 13).
 
@@ -239,7 +247,7 @@ def slope_saturation_vapor_pressure(temp: Union[float, np.ndarray]) -> Union[flo
     return 4098.0 * saturation_vapor_pressure(t) / (t + 237.3) ** 2
 
 
-def psychrometric_constant(elev: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+def psychrometric_constant(elev: float | np.ndarray) -> float | np.ndarray:
     """
     Psychrometric constant gamma from elevation (FAO-56 Eq. 8).
 
@@ -260,9 +268,9 @@ def psychrometric_constant(elev: Union[float, np.ndarray]) -> Union[float, np.nd
 
 
 def extraterrestrial_radiation(
-    doy: Union[int, np.ndarray],
-    lat: Union[float, np.ndarray],
-) -> Union[float, np.ndarray]:
+    doy: int | np.ndarray,
+    lat: float | np.ndarray,
+) -> float | np.ndarray:
     """
     Daily extraterrestrial radiation Ra (FAO-56 Eq. 21).
 
@@ -287,16 +295,16 @@ def extraterrestrial_radiation(
 
 
 def net_radiation(
-    srad_mj: Union[float, np.ndarray],
-    tmin:    Union[float, np.ndarray],
-    tmax:    Union[float, np.ndarray],
-    ea:      Union[float, np.ndarray],
-    elev:    Union[float, np.ndarray],
-    doy:     Union[int, np.ndarray],
-    lat:     Union[float, np.ndarray],
+    srad_mj: float | np.ndarray,
+    tmin:    float | np.ndarray,
+    tmax:    float | np.ndarray,
+    ea:      float | np.ndarray,
+    elev:    float | np.ndarray,
+    doy:     int | np.ndarray,
+    lat:     float | np.ndarray,
     *,
     alpha: float = 0.23,
-) -> Union[float, np.ndarray]:
+) -> float | np.ndarray:
     """
     Daily net radiation Rn (FAO-56 Eqs. 38–40).
 
@@ -346,20 +354,25 @@ def net_radiation(
 # ---------------------------------------------------------------------------
 
 def reference_et_penman_monteith(
-    doy:   Union[int,   np.ndarray],
-    lat:   Union[float, np.ndarray],
-    elev:  Union[float, np.ndarray],
-    tmin:  Union[float, np.ndarray],
-    tmax:  Union[float, np.ndarray],
-    srad:  Union[float, np.ndarray],
-    wspd:  Union[float, np.ndarray],
-    rhmin: Union[float, np.ndarray],
-    rhmax: Union[float, np.ndarray],
+    doy:   int | np.ndarray,
+    lat:   float | np.ndarray,
+    elev:  float | np.ndarray,
+    tmin:  float | np.ndarray,
+    tmax:  float | np.ndarray,
+    srad:  float | np.ndarray,
+    wspd:  float | np.ndarray,
+    rhmin: float | np.ndarray | None = None,
+    rhmax: float | np.ndarray | None = None,
     *,
-    vpd: Union[float, np.ndarray] | None = None,
+    vpd: float | np.ndarray | None = None,
+    wind_height: float = 2.0,
 ) -> np.ndarray:
     """
     Daily reference evapotranspiration by the FAO-56 Penman-Monteith method.
+
+    Humidity may be supplied either as rhmin/rhmax or as a vapor pressure
+    deficit (vpd) — provide at least one. The Kansas Mesonet reports VPD
+    directly (VPDEFAVG), so passing it avoids re-deriving it from RH.
 
     Parameters
     ----------
@@ -376,32 +389,44 @@ def reference_et_penman_monteith(
     srad : float or array-like
         Mean solar irradiance (W m⁻²); converted to MJ m⁻² day⁻¹ internally.
     wspd : float or array-like
-        Wind speed at 2 m (m s⁻¹).
-    rhmin : float or array-like
-        Daily minimum relative humidity (%).
-    rhmax : float or array-like
-        Daily maximum relative humidity (%).
+        Wind speed at wind_height (m s⁻¹).
+    rhmin : float or array-like, optional
+        Daily minimum relative humidity (%). Required unless vpd is given.
+    rhmax : float or array-like, optional
+        Daily maximum relative humidity (%). Required unless vpd is given.
     vpd : float or array-like, keyword-only, optional
-        Vapor pressure deficit (kPa). When provided, rhmin and rhmax are
-        still used for net longwave radiation but VPD is taken directly.
-        A scaling factor of 0.84 is applied when VPD is estimated from
-        rhmin and rhmax (FAO-56 Eq. 17).
+        Vapor pressure deficit (kPa). When provided it is used directly
+        (clipped to >= 0) for the aerodynamic term instead of being estimated
+        from rhmin/rhmax. If rhmin/rhmax are also given they are used to derive
+        ea for net longwave radiation; otherwise ea is derived as es - vpd.
+        When vpd is None it is computed as es - ea from rhmin/rhmax (FAO-56
+        Eq. 17).
+    wind_height : float, keyword-only, default 2.0
+        Height (m) at which wspd was measured. Wind is adjusted to 2 m via the
+        FAO-56 log profile (Eq. 47); at 2 m the factor is ~1.0. Pass 10.0 to
+        use the Mesonet 10 m anemometer.
 
     Returns
     -------
     ETo : np.ndarray
         Reference ET (mm day⁻¹), rounded to 2 decimal places.
     """
+    have_rh = rhmin is not None and rhmax is not None
+    if not have_rh and vpd is None:
+        raise ValueError(
+            "Provide both rhmin and rhmax, or vpd, to specify humidity."
+        )
+
     tmin  = np.asarray(tmin,  dtype=float)
     tmax  = np.asarray(tmax,  dtype=float)
     srad  = np.asarray(srad,  dtype=float)
     wspd  = np.asarray(wspd,  dtype=float)
-    rhmin = np.asarray(rhmin, dtype=float)
-    rhmax = np.asarray(rhmax, dtype=float)
     tavg  = (tmin + tmax) / 2.0
 
-    # Wind speed correction to 2 m (Mesonet sensor is already at 2 m → factor = 1.0)
-    u2 = wspd * (4.87 / np.log(67.8 * 2.0 - 5.42))
+    # Wind speed adjusted to 2 m using the FAO-56 log profile (Eq. 47). At
+    # wind_height = 2 m the factor is ~1.0 (Mesonet 2 m sensor); pass 10.0 to
+    # use the 10 m anemometer instead.
+    u2 = wspd * (4.87 / np.log(67.8 * wind_height - 5.42))
 
     srad_mj = srad_to_mj(srad, 86_400)
 
@@ -409,16 +434,21 @@ def reference_et_penman_monteith(
     es_max = saturation_vapor_pressure(tmax)
     es     = (es_min + es_max) / 2.0
 
-    # Actual vapor pressure from rhmin/rhmax (FAO-56 Eq. 17)
-    ea = (es_min * rhmax / 100.0 + es_max * rhmin / 100.0) / 2.0
+    # Actual vapor pressure ea (kPa), needed for net longwave radiation.
+    # Prefer rhmin/rhmax (FAO-56 Eq. 17); otherwise derive it from vpd.
+    if have_rh:
+        rhmin = np.asarray(rhmin, dtype=float)
+        rhmax = np.asarray(rhmax, dtype=float)
+        ea = (es_min * rhmax / 100.0 + es_max * rhmin / 100.0) / 2.0
+    else:
+        ea = np.maximum(es - np.asarray(vpd, dtype=float), 0.0)
 
-    # VPD: use supplied value
+    # VPD for the aerodynamic term: supplied value when available, else es - ea.
     if vpd is not None:
         vpd = np.maximum(np.asarray(vpd, dtype=float), 0.0)
     else:
         vpd = np.maximum((es - ea), 0.0)
 
-    Ra = extraterrestrial_radiation(doy, lat)
     Rn = net_radiation(srad_mj, tmin, tmax, ea, elev, doy, lat)
 
     Delta = slope_saturation_vapor_pressure(tavg)
@@ -433,12 +463,12 @@ def reference_et_penman_monteith(
 
 
 def reference_et_hargreaves(
-    doy:   Union[int, np.ndarray],
-    lat:   Union[float, np.ndarray],
-    tmin:  Union[float, np.ndarray],
-    tmax:  Union[float, np.ndarray],
+    doy:   int | np.ndarray,
+    lat:   float | np.ndarray,
+    tmin:  float | np.ndarray,
+    tmax:  float | np.ndarray,
     *,
-    tmean: Union[float, np.ndarray] | None = None,
+    tmean: float | np.ndarray | None = None,
 ) -> np.ndarray:
     """
     Daily reference evapotranspiration by the Hargreaves-Samani (1985) method.
@@ -482,8 +512,8 @@ def reference_et_hargreaves(
 # Others
 # ------
 def growing_degree_days(
-    tmin:    Union[float, np.ndarray],
-    tmax:    Union[float, np.ndarray],
+    tmin:    float | np.ndarray,
+    tmax:    float | np.ndarray,
     base:    float = 10.0,
     ceiling: float | None = 30.0,
 ) -> np.ndarray:
@@ -509,8 +539,8 @@ def growing_degree_days(
 
 
 def heat_index(
-    temp: Union[float, np.ndarray],
-    rh:   Union[float, np.ndarray],
+    temp: float | np.ndarray,
+    rh:   float | np.ndarray,
 ) -> np.ndarray:
     """
     NOAA/NWS heat index (apparent temperature), °C rounded to 1 dp.
@@ -552,8 +582,8 @@ def heat_index(
 
 
 def wind_chill(
-    temp: Union[float, np.ndarray],
-    wspd: Union[float, np.ndarray],
+    temp: float | np.ndarray,
+    wspd: float | np.ndarray,
 ) -> np.ndarray:
     """
     NWS wind chill temperature, °C rounded to 1 dp.
@@ -570,8 +600,8 @@ def wind_chill(
 
 
 def temperature_humidity_index(
-    temp: Union[float, np.ndarray],
-    rh:   Union[float, np.ndarray],
+    temp: float | np.ndarray,
+    rh:   float | np.ndarray,
 ) -> np.ndarray:
     """
     Temperature-Humidity Index (THI) for livestock heat stress.

@@ -16,6 +16,7 @@ from ksmesopy.core import (
     _VALID_FOR,
     request_data,
     request_data_multi,
+    request_snapshot,
     rename_columns,
 )
 
@@ -64,6 +65,7 @@ __all__ = [
     # Data retrieval
     "request_data",
     "request_data_multi",
+    "request_snapshot",
     "rename_columns",
     # Soil processing
     "calibrate_vwc",

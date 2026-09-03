@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Literal, Union
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -220,8 +220,8 @@ def list_variables(
 
 def request_data(
     station:   str,
-    start:     Union[str, pd.Timestamp],
-    end:       Union[str, pd.Timestamp],
+    start:     str | pd.Timestamp,
+    end:       str | pd.Timestamp,
     interval:  Literal["5min", "hour", "day"],
     variables: list[str],
     *,
@@ -337,14 +337,14 @@ def request_data(
 
 
 def _fetch_chunk(url: str, station: str, verbose: bool) -> pd.DataFrame:
+    last_exc: Exception | None = None
     for attempt in range(1, _MAX_RETRIES + 1):
         try:
             return pd.read_csv(url, na_values="M", parse_dates=["TIMESTAMP"])
         except Exception as exc:
+            last_exc = exc
             if attempt == _MAX_RETRIES:
-                raise RuntimeError(
-                    f"Request failed for {station!r} after {_MAX_RETRIES} attempts: {exc}"
-                ) from exc
+                break
             logger.warning(
                 "Attempt %d/%d failed for %s: %s — retrying",
                 attempt, _MAX_RETRIES, station, exc,
@@ -355,11 +355,15 @@ def _fetch_chunk(url: str, station: str, verbose: bool) -> pd.DataFrame:
             )
             time.sleep(_RETRY_SLEEP)
 
+    raise RuntimeError(
+        f"Request failed for {station!r} after {_MAX_RETRIES} attempts: {last_exc}"
+    ) from last_exc
+
 
 def request_data_multi(
     stations:  list[str],
-    start:     Union[str, pd.Timestamp],
-    end:       Union[str, pd.Timestamp],
+    start:     str | pd.Timestamp,
+    end:       str | pd.Timestamp,
     interval:  Literal["5min", "hour", "day"],
     variables: list[str],
     *,
@@ -389,7 +393,7 @@ def request_data_multi(
 
 
 def request_snapshot(
-    timestamp: Union[str, pd.Timestamp],
+    timestamp: str | pd.Timestamp,
     interval:  Literal["5min", "hour", "day"],
     variables: list[str],
     *,
@@ -482,7 +486,7 @@ def request_snapshot(
 
 def rename_columns(
     df:     pd.DataFrame,
-    preset: Union[Literal["snake"], dict] = "snake",
+    preset: Literal["snake"] | dict = "snake",
 ) -> pd.DataFrame:
     """
     Rename DataFrame columns using a preset or a custom mapping.
