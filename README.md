@@ -92,7 +92,7 @@ A GUI for selecting stations, date ranges, variables, and intervals, with a tabu
 
 | Function | Returns | Description |
 |---|---|---|
-| `reference_et_penman_monteith(doy, lat, elev, tmin, tmax, srad, wspd, rhmin, rhmax, *, vpd, ea, wind_height)` | `ndarray` | FAO-56 Penman-Monteith. Supply vapour pressure via `ea=`, `vpd=`, or `rhmin=`+`rhmax=`. `srad` in W m⁻², converted internally. |
+| `reference_et_penman_monteith(doy, lat, elev, tmin, tmax, srad, wspd, rhmin=None, rhmax=None, *, vpd=None, wind_height=2.0)` | `ndarray` | FAO-56 Penman-Monteith. Supply humidity as either `rhmin=`+`rhmax=` or `vpd=` (at least one is required); when only `vpd=` is given, `ea` for net longwave is derived as `es − vpd`. `srad` in W m⁻², converted internally. `wind_height` (m) adjusts wind to 2 m via the FAO-56 log profile — pass `10.0` for the 10 m sensor. |
 | `reference_et_hargreaves(doy, lat, tmin, tmax, *, tmean)` | `ndarray` | Hargreaves–Samani. Temperature only — no humidity, radiation, or wind needed. |
 
 Both return ETo (mm day⁻¹) as an `ndarray`. Use `extraterrestrial_radiation(doy, lat)` if you also need Ra.

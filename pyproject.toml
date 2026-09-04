@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ksmesopy"
-version = "0.6.0"
+version = "0.7.0"
 description = "Python API for the Kansas Mesonet"
 readme = "README.md"
 license = { text = "MIT" }
@@ -28,3 +28,6 @@ Repository = "https://github.com/soilwater/ksmesopy"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["ksmesopy*"]
+
+[tool.setuptools.package-data]
+ksmesopy = ["py.typed"]

@@ -1,0 +1,92 @@
+# ksmesopy
+
+> Python package for downloading and processing data from the Kansas Mesonet (https://mesonet.k-state.edu), an environmental monitoring network operated by Kansas State University. It wraps the Mesonet REST API (station metadata, chunked single-station time series, and network-wide snapshots), ships a typed variable catalogue, and adds soil-moisture calibration plus FAO-56 agrometeorology (reference ET, VPD, GDD, heat index) and Matplotlib chart helpers.
+
+Import convention: `import ksmesopy as ms`. Data-retrieval functions return pandas DataFrames; derived-variable and agrometeorology functions accept scalars or NumPy arrays and return NumPy arrays. The package is fully type-hinted and ships a PEP 561 `py.typed` marker.
+
+Conventions an agent must know before writing code against this package:
+
+- **Intervals** are the strings `"day"`, `"hour"`, or `"5min"` (not integers).
+- **Variables** are passed as API-name strings, e.g. `"TEMP2MAVG"`, `"PRECIP"`, `"VWC5CM"`. Call `ms.list_variables(interval)` for the machine-readable catalogue (`api_name`, `snake_name`, `description`, `intervals`), or `ms.rename_columns(df)` to convert columns to snake_case (`TEMP2MAVG` → `tair_2m_avg`).
+- **Daily convention**: the API stores each day's aggregate at 00:00 of the *next* calendar day. `request_data` and `request_snapshot` correct this automatically, so the returned `TIMESTAMP` is the observation date and the two agree for any given day.
+- **Missing values** are encoded as `"M"` by the API and read back as `NaN`. Periods before a station/sensor existed are NaN-filled, not dropped.
+- **Soil water content (VWC)**: values from the API use the CS655 firmware equation. Call `ms.calibrate_vwc(df)` to apply the KSU site-specific calibration — it requires the matching `SOILKA*CM` (dielectric) and `SOILEC*CM` (EC) columns to be fetched alongside the `VWC*CM` columns.
+- **Precipitation**: most stations have dual gauges `PRECIP` and `PRECIP2`. Merge with a row-wise max if you want a single series: `df["PRECIP"] = df[["PRECIP","PRECIP2"]].max(axis=1)`.
+- **Long requests** are split into 3,000-record chunks (multiple round trips). Pass `verbose=True` to print progress; messages also go to the `ksmesopy` logger at `DEBUG`.
+
+## Documentation
+
+- [README](https://github.com/soilwater/ksmesopy/blob/main/README.md): full API reference, the complete variable catalogue with units and per-interval availability, usage notes, and worked examples. Start here.
+- [Examples notebook](https://github.com/soilwater/ksmesopy/blob/main/ksmesopy/examples/examples.ipynb): runnable end-to-end workflows.
+
+## Public API
+
+All names below are importable directly from the top-level `ksmesopy` package.
+
+Stations & catalogue:
+- `get_stations(names_only=False) -> DataFrame | list[str]` — station metadata, or a sorted list of names.
+- `get_stations_active() -> DataFrame` — availability table (`STATION`, `OBS_INTERVAL` seconds, `START`, `END`).
+- `list_variables(interval=None) -> list[dict]` — variable catalogue, optionally filtered by interval.
+- `rename_columns(df, preset="snake") -> DataFrame` — API names to snake_case, or pass a custom `dict`.
+
+Data retrieval:
+- `request_data(station, start, end, interval, variables, *, verbose=False, sleep=0.8) -> DataFrame` — one station, many timestamps.
+- `request_data_multi(stations, start, end, interval, variables, *, verbose=False, sleep=0.8) -> dict[str, DataFrame]` — several named stations.
+- `request_snapshot(timestamp, interval, variables, *, verbose=False) -> DataFrame` — one timestamp across every station (`STATION` column, one row per station).
+
+Soil processing:
+- `calibrate_vwc(df, vwc_cols=None) -> DataFrame` — replace firmware VWC with the KSU calibration (needs `SOILKA*CM` + `SOILEC*CM`).
+- `compute_soil_water_storage(df) -> DataFrame` — trapezoidal storage over the top 50 cm; adds `STORAGE_MM`; needs all four VWC depths.
+
+Reference evapotranspiration (return ETo in mm day⁻¹):
+- `reference_et_penman_monteith(doy, lat, elev, tmin, tmax, srad, wspd, rhmin=None, rhmax=None, *, vpd=None, wind_height=2.0) -> ndarray` — FAO-56. Supply humidity as `rhmin`+`rhmax` **or** `vpd` (at least one). `srad` in W m⁻². `wind_height` adjusts wind to 2 m; pass `10.0` for the 10 m sensor.
+- `reference_et_hargreaves(doy, lat, tmin, tmax, *, tmean=None) -> ndarray` — temperature-only method.
+
+Atmospheric helpers (scalars or arrays):
+- `saturation_vapor_pressure(temp)`, `actual_vapor_pressure(temp, rh)`, `vapor_pressure_deficit(temp, rh)`, `slope_saturation_vapor_pressure(temp)` — kPa (VPD clipped ≥ 0).
+- `atmospheric_pressure(elev)`, `psychrometric_constant(elev)` — kPa, kPa °C⁻¹.
+- `extraterrestrial_radiation(doy, lat)`, `net_radiation(srad_mj, tmin, tmax, ea, elev, doy, lat, *, alpha=0.23)` — MJ m⁻² day⁻¹.
+- `srad_to_mj(srad, period)` — mean irradiance (W m⁻²) to energy (MJ m⁻²).
+
+Other derived variables:
+- `growing_degree_days(tmin, tmax, base=10.0, ceiling=30.0)`, `heat_index(temp, rh)`, `wind_chill(temp, wspd)`, `temperature_humidity_index(temp, rh)`.
+
+Charts (each draws onto a caller-supplied Matplotlib `Axes` and returns it; column names may be API or snake_case):
+- `plot_temperature(ax, df, variables, *, band=True, ylabel, legend=True)`, `plot_precip(ax, df, variable="PRECIP", *, ylabel, color)`, `plot_humidity(...)`, `plot_vpd(...)`, `plot_solar_radiation(...)`, `plot_wind(ax, df, speed="WSPD2MAVG", direction=None, ...)`, `plot_vwc(ax, df, variables=None, ...)`, `plot_et(ax, df, variables, *, bar=False, ...)`.
+
+## Quick start
+
+```python
+import ksmesopy as ms
+
+# One station, daily
+df = ms.request_data(
+    station="Manhattan",
+    start="2024-01-01", end="2024-12-31",
+    interval="day",
+    variables=["TEMP2MAVG", "TEMP2MMIN", "TEMP2MMAX", "PRECIP"],
+)
+
+# Calibrated soil moisture + storage (fetch VWC with its Ka/EC dependencies)
+soil = ms.request_data(
+    "Manhattan", "2024-06-01", "2024-06-30", "day",
+    ["VWC5CM", "SOILKA5CM", "SOILEC5CM",
+     "VWC10CM", "SOILKA10CM", "SOILEC10CM",
+     "VWC20CM", "SOILKA20CM", "SOILEC20CM",
+     "VWC50CM", "SOILKA50CM", "SOILEC50CM"],
+)
+soil = ms.calibrate_vwc(soil)
+soil = ms.compute_soil_water_storage(soil)   # adds STORAGE_MM
+
+# Network snapshot: every station at one daily timestamp
+snap = ms.request_snapshot("2025-01-01", "day", ["TEMP2MAVG", "PRECIP"])
+```
+
+## Optional
+
+- [Source: core.py](https://github.com/soilwater/ksmesopy/blob/main/ksmesopy/core.py): station metadata, variable catalogue, data retrieval, `rename_columns`.
+- [Source: utils.py](https://github.com/soilwater/ksmesopy/blob/main/ksmesopy/utils.py): soil calibration/storage, FAO-56 agrometeorology, reference ET, GDD/heat-index/wind-chill/THI.
+- [Source: charts.py](https://github.com/soilwater/ksmesopy/blob/main/ksmesopy/charts.py): Matplotlib plot helpers.
+- [Source: app.py](https://github.com/soilwater/ksmesopy/blob/main/ksmesopy/app.py): optional desktop GUI, entry point `ksmesopy-app` (requires the `[app]` extra).
+- [smoke_test.py](https://github.com/soilwater/ksmesopy/blob/main/ksmesopy/smoke_test.py): self-contained checks of the pure functions (no network); run `python -m ksmesopy.smoke_test`.
+- [pyproject.toml](https://github.com/soilwater/ksmesopy/blob/main/pyproject.toml): dependencies, entry points, packaging.
