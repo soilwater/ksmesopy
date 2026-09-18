@@ -9,7 +9,7 @@ pip install ksmesopy
 pip install "ksmesopy[app]"  # Use this to also install a GUI
 ```
 
-Dependencies: `numpy`, `pandas`, `matplotlib`. The desktop app additionally requires `guile`.
+Dependencies: `numpy`, `pandas`, `matplotlib`. The desktop app additionally requires `guile>=1.0.0,<2`.
 
 ## Quick start
 
@@ -48,7 +48,7 @@ ksmesopy-app
 
 ![Graphical User Interface](app_demo.gif)
 
-A GUI for selecting stations, date ranges, variables, and intervals, with a tabular view and time-series chart. Exports data to CSV and charts as PNG.
+A GUI for selecting stations, date ranges, variables, and intervals. Use the left navigation rail to switch between Inputs, Table, and Chart. Exports data to CSV and charts as PNG. The app ships with the Python package and runs directly without compilation; you can also launch it with `python -m ksmesopy.app`.
 
 ---
 

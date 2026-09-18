@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ksmesopy"
-version = "0.7.0"
+version = "0.7.1"
 description = "Python API for the Kansas Mesonet"
 readme = "README.md"
 license = { text = "MIT" }
@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-app = ["guile"]
+app = ["guile>=1.0.0,<2"]
  
 [project.scripts]
 ksmesopy-app = "ksmesopy.app:main"
