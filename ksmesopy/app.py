@@ -3,8 +3,8 @@ ksmesopy GUI
 ============
 Desktop app for downloading and exploring Kansas Mesonet data.
 
-Tabs
-----
+Navigation
+----------
 ⚙  Inputs  — Station, date range, interval, and variable selection
 📋  Table   — Downloaded data with CSV export
 📈  Chart   — Time-series plot with PNG export
@@ -105,7 +105,7 @@ _display_df = gui.state(None)   # Renamed copy shown in the Table tab
 _status     = gui.state([])
 _loading    = gui.state(False)
 
-_active_tab = gui.state("⚙  Inputs")
+_active_tab = gui.state("Inputs")
 _chart_var  = gui.state("")
 _chart_b64  = gui.state("")
 
@@ -147,9 +147,6 @@ def _load_stations():
         _station_active.set(lookup)
     except Exception:
         pass  # advisory only; silently skip if unavailable
-
-threading.Thread(target=_load_stations, daemon=True).start()
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -283,7 +280,7 @@ def fetch():
                 _chart_var.set(num_cols[0])
                 _make_chart(df, num_cols[0])
 
-            _active_tab.set("📋  Table")
+            _active_tab.set("Table")
 
         except Exception as exc:
             _log(f"✗ Error: {exc}")
@@ -384,9 +381,6 @@ def _var_checkbox(api: str, label: str):
 # Tab renderers
 # ---------------------------------------------------------------------------
 
-TAB_LABELS = ["⚙  Inputs", "📋  Table", "📈  Chart"]
-
-
 def _inputs_tab():
     intv = _interval.value
 
@@ -415,7 +409,7 @@ def _inputs_tab():
         atm   = [(a, lbl) for a, lbl, g, _ in valid if g == "Atmospheric"]
         soil  = [(a, lbl) for a, lbl, g, _ in valid if g == "Soil"]
 
-        with gui.row(gap=28, align="flex-start"):
+        with gui.row(gap=20, align="flex-start", wrap=True):
             for i, chunk in enumerate(_col_chunks(atm, 2)):
                 with gui.col(gap=5, style="min-width:210px"):
                     if i == 0:
@@ -530,7 +524,7 @@ def _chart_tab():
 # Entry point
 # ---------------------------------------------------------------------------
 
-@gui.app("Kansas Mesonet", width=1040, height=740, resizable=True)
+@gui.app("Kansas Mesonet", width=1120, height=740, resizable=True)
 def ui():
     gui.theme("light", primary="#2563eb")
 
@@ -542,17 +536,24 @@ def ui():
                 gui.title("Kansas Mesonet", size="lg", style="line-height:1")
                 gui.text("Environmental Monitoring Network", muted=True, size="xs")
 
-        tab = gui.tabs(TAB_LABELS, value=_active_tab,
-                       on_change=_active_tab.set, key="main_tabs")
+        with gui.row(gap=0, align="stretch", fill=True, style="min-height:0"):
+            gui.rail([
+                {"label": "Inputs", "icon": gui.icon("sliders-horizontal")},
+                {"label": "Table", "icon": gui.icon("table")},
+                {"label": "Chart", "icon": gui.icon("chart-line")},
+            ], value=_active_tab, on_change=_active_tab.set, key="main_nav",
+                style="padding:12px 8px;background:var(--surface);"
+                      "border-right:1px solid var(--border);flex-shrink:0")
 
-        with gui.col(fill=True, scroll=True):
-            if   tab == "⚙  Inputs": _inputs_tab()
-            elif tab == "📋  Table":  _table_tab()
-            elif tab == "📈  Chart":  _chart_tab()
+            with gui.col(fill=True, scroll=True, style="min-width:0"):
+                if   _active_tab.value == "Inputs": _inputs_tab()
+                elif _active_tab.value == "Table":  _table_tab()
+                elif _active_tab.value == "Chart":  _chart_tab()
 
 
 def main():
-    ui()
+    threading.Thread(target=_load_stations, daemon=True).start()
+    gui.run()
 
 
 if __name__ == "__main__":
